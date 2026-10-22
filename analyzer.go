@@ -27,10 +27,14 @@ type Config struct {
 	Thresholds Thresholds
 }
 
-// Analyzer analyses a stream of frames. It is not safe for concurrent use.
+// Analyzer analyses a stream of frames. Whether a frame belongs to a
+// hazardous sequence depends on the second of video after it, so each frame
+// is decided one second after it is analysed. It is not safe for concurrent
+// use.
 type Analyzer struct {
 	detect   *detector
 	analysis Analysis
+	finished bool
 }
 
 // NewAnalyzer starts the analysis of a video with the given frame rate and
@@ -68,27 +72,45 @@ func NewAnalyzer(fps float64, width, height int, cfg Config) (*Analyzer, error) 
 	}, nil
 }
 
-// Analyze analyses the next frame and returns its result. The frame must
-// have the size the analyzer was created with.
-func (a *Analyzer) Analyze(f *Frame) (FrameResult, error) {
-	if err := f.validate(a.analysis.Width, a.analysis.Height); err != nil {
-		return FrameResult{}, err
+// ErrFinished is returned when frames are analysed after Finish.
+var ErrFinished = errors.New("psv: analysis is finished")
+
+// Analyze analyses the next frame. The frame must have the size the analyzer
+// was created with. The frames it decides are appended to Analysis().Frames;
+// it returns how many.
+func (a *Analyzer) Analyze(f *Frame) (int, error) {
+	if a.finished {
+		return 0, ErrFinished
 	}
 
-	r := a.detect.process(f)
-	a.analysis.Frames = append(a.analysis.Frames, r)
+	if err := f.validate(a.analysis.Width, a.analysis.Height); err != nil {
+		return 0, err
+	}
 
-	return r, nil
+	decided := a.detect.process(f)
+	a.analysis.Frames = append(a.analysis.Frames, decided...)
+
+	return len(decided), nil
 }
 
-// Analysis returns the analysis of the frames analysed so far.
+// Finish decides the remaining frames and returns the complete analysis.
+func (a *Analyzer) Finish() *Analysis {
+	if !a.finished {
+		a.finished = true
+		a.analysis.Frames = append(a.analysis.Frames, a.detect.flush()...)
+	}
+
+	return &a.analysis
+}
+
+// Analysis returns the analysis of the frames decided so far.
 func (a *Analyzer) Analysis() *Analysis {
 	return &a.analysis
 }
 
-// Progress reports a frame's result during AnalyzeFile. frame starts at 1;
-// total is the expected number of frames, or zero when unknown.
-type Progress func(frame, total int, r FrameResult)
+// Progress reports progress during AnalyzeFile: the number of frames read,
+// starting at 1, and the expected total, or zero when unknown.
+type Progress func(frame, total int)
 
 // Options configures AnalyzeFile.
 type Options struct {
@@ -136,11 +158,11 @@ func AnalyzeFile(ctx context.Context, path string, opts Options) (*Analysis, err
 		return nil, err
 	}
 
-	return a.Analysis(), nil
+	return a.Finish(), nil
 }
 
 func (a *Analyzer) run(ctx context.Context, dec *Decoder, total int, progress Progress) error {
-	for {
+	for n := 1; ; n++ {
 		f, err := dec.Next()
 		if errors.Is(err, io.EOF) {
 			return ctx.Err()
@@ -154,13 +176,12 @@ func (a *Analyzer) run(ctx context.Context, dec *Decoder, total int, progress Pr
 			return err
 		}
 
-		r, err := a.Analyze(f)
-		if err != nil {
+		if _, err := a.Analyze(f); err != nil {
 			return err
 		}
 
 		if progress != nil {
-			progress(len(a.analysis.Frames), total, r)
+			progress(n, total)
 		}
 	}
 }

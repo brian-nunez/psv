@@ -40,13 +40,13 @@ Result:                    Failed
 Frame rate:                30 fps
 Length:                    1m1.433s (1843 frames)
 Video size:                1920x1080
-Luminance flash failures:  335 frames
-Red flash failures:        384 frames
+Luminance flash failures:  338 frames
+Red flash failures:        385 frames
 
 Defects: 8
   #  Frames     Time           Luminance  Red
   1  72-115     2.37s-3.83s    X
-  2  281-332    9.33s-11.07s   X          X
+  2  276-329    9.17s-10.97s   X          X
   ...
 ```
 
@@ -113,7 +113,7 @@ broadcast guidelines assume, 0.1 is their 20 cd/m² threshold.
     "areaPercent": 25,
     "maxTransitions": 6
   },
-  "failures": { "luminance": 335, "red": 384 },
+  "failures": { "luminance": 338, "red": 385 },
   "defects": [
     {
       "firstFrame": 72,
@@ -129,10 +129,12 @@ broadcast guidelines assume, 0.1 is their 20 cd/m² threshold.
 ```
 
 With `-frames`, `results` adds one entry per frame. Each entry has
-`luminance` and `red` measurements: the alternating transitions within the last
+`luminance` and `red` measurements for the region that transitioned in that
+frame with the most alternating transitions: how many fall within the last
 second (`transitions`), the frame the sequence started (`since`), the region
-(`region`, in source pixels), the share of it that flashed together (`area`,
-percent) and whether the frame completes a failing sequence (`failed`).
+(`region`, in source pixels), the share of it that transitioned together
+(`area`, percent) and whether the frame completes a failing sequence
+(`failed`).
 
 ## Library
 
@@ -147,7 +149,8 @@ fmt.Println(report.Verdict, report.Failures.Luminance, len(report.Defects))
 ```
 
 Apps that already have decoded frames, such as a screen recorder or a mobile
-camera feed, use an `Analyzer` directly:
+camera feed, use an `Analyzer` directly. A frame is decided one second after it
+is analysed, because whether its pixels flash depends on what follows:
 
 ```go
 a, err := psv.NewAnalyzer(30, 1920, 1080, psv.Config{Thresholds: psv.WCAG22()})
@@ -156,17 +159,20 @@ if err != nil {
 }
 
 for frame := range frames { // *psv.Frame: packed 8-bit sRGB, top row first
-	result, err := a.Analyze(frame)
+	n, err := a.Analyze(frame)
 	if err != nil {
 		return err
 	}
 
-	if result.Failed() {
-		// warn as soon as a failing sequence completes
+	decided := a.Analysis().Frames
+	for _, r := range decided[len(decided)-n:] {
+		if r.Failed() {
+			// warn: a failing sequence completed
+		}
 	}
 }
 
-verdict := a.Analysis().Verdict()
+verdict := a.Finish().Verdict()
 ```
 
 ## Documentation

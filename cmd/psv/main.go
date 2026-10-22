@@ -93,7 +93,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if *progress {
-		opts.Progress = func(frame, total int, _ psv.FrameResult) {
+		opts.Progress = func(frame, total int) {
 			if total > 0 {
 				printf(stderr, "\ranalysing frame %d of %d (%d%%)", frame, total, min(100, frame*100/total))
 			} else {

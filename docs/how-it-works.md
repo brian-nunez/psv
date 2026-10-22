@@ -17,7 +17,7 @@ a custom `psv.Thresholds`.
 ```
 video file ──ffmpeg──▶ RGB frames ──▶ per-pixel measurements ──▶ per-pixel transitions
                                                                        │
-            verdict ◀── defects ◀── frame results ◀── shared sequences ◀┘
+            verdict ◀── defects ◀── frame results ◀── region transitions ◀┘
 ```
 
 1. **Decoding** (`media.go`). ffprobe reads the frame rate and size; ffmpeg
@@ -30,9 +30,8 @@ video file ──ffmpeg──▶ RGB frames ──▶ per-pixel measurements ─
    full HD are reduced by an integer factor, averaging blocks in linear light.
 3. **Transitions** (`detector.go`). Each pixel is compared with the previous
    frame.
-4. **Sequences and area**. Pixels whose transitions within the last second fall
-   on the same frames are grouped, and the group is measured against the area
-   threshold.
+4. **Area and count**. Each region transitions when enough flashing pixels in it
+   transition together; a region that transitions too often fails.
 5. **Verdict** (`analysis.go`, `report.go`). Frames that complete a failing
    sequence become defects, and the video fails when any frame does.
 
@@ -60,32 +59,39 @@ as a bitmask.
 
 ## Area: flashing together
 
-The guidelines measure the area of flashes that happen *concurrently*. PSV
-takes that literally: pixels flash together only when their transitions fall
-on exactly the same frames.
+The guidelines measure the combined area of flashes that happen
+*concurrently*. PSV applies that per frame and per region:
 
-For every frame in which pixels transition, PSV:
+1. **Flashing pixels.** A pixel flashes when it makes more than the allowed
+   alternating transitions (six under WCAG 2.2) within some one-second window.
+   Only flashing pixels count toward the area.
+2. **Region transitions.** For every frame, PSV counts, in every region
+   position (341×256 pixels under WCAG 2.2), the flashing pixels that start a
+   transition up and those that start one down in that frame, using summed-area
+   tables so every position is checked. The region transitions in that
+   direction when either count reaches the area threshold.
+3. **Region count.** Each region position keeps its recent transitions. Only a
+   transition opposite to the region's last one counts. A region with more
+   than the allowed alternating transitions within one second fails, and so
+   does the frame.
 
-1. Groups those pixels by their transition bitmask. A group is a set of pixels
-   flashing in lockstep.
-2. For a group that has more transitions than the count allows, also adds every
-   pixel whose transitions *include* the group's frames. A pixel that flashes
-   with the group and also flashes on its own (where two flashing areas
-   overlap) still flashes with the group.
-3. Finds the region (341×256 pixels under WCAG 2.2) holding the most of those
-   pixels, with a summed-area table so that every region position is checked.
-4. Reports the group with the most transitions whose pixels cover at least the
-   area threshold of one region.
-
-A frame **fails** when that group has more transitions than allowed.
-
-This rule keeps apart what the guidelines keep apart:
+The two rules together keep apart what the guidelines keep apart:
 
 - Two areas that each flash three times a second, out of step with each other,
-  do not add up to six flashes.
+  do not add up to six flashes: none of their pixels flash on their own.
 - Two halves of an area that flash in sync combine into one area.
-- If one transition of one half is a single frame late, the halves no longer
-  flash together and are measured separately.
+- If one transition of one half is a single frame late, the region misses that
+  transition, because neither half covers the area alone in either frame.
+- Moving patterns, where every pixel flashes fast but neighbours are a frame or
+  two out of phase, still fail: in each frame enough of them transition
+  together.
+
+### Deciding a frame takes a second
+
+Whether a pixel flashes depends on the second around a frame, including the
+second after it. PSV therefore decides each frame once one more second of video
+has been seen. `Analyzer.Analyze` returns how many frames it decided, and
+`Analyzer.Finish` decides the last second at the end of the video.
 
 ## Timing
 
@@ -113,13 +119,11 @@ transition at once. PSV keeps this fast without approximating:
 - Chromaticity is only computed for pixels that are saturated red in one of the
   two frames.
 - Each frame is split into row bands analysed in parallel.
-- Groups are tried in order of transition count, and the search stops at the
-  first one that covers the area threshold. The region search only covers the
-  group's bounding box and runs in parallel.
+- The region search only runs in frames where enough flashing pixels
+  transition to reach the area threshold, and runs in parallel.
 - ffmpeg decodes the next frames while the current one is analysed.
 
-On a 10-core laptop, a 61-second 1080p strobe clip takes about 22 seconds and a
-20-second clip of ordinary moving footage about 13 seconds.
+On a 10-core laptop, a 61-second 1080p strobe clip takes about 16 seconds.
 
 ## Design choices and limits
 
@@ -127,10 +131,11 @@ On a 10-core laptop, a 61-second 1080p strobe clip takes about 22 seconds and a
   values. The test media's saturated-red patterns sit at 0.80 in linear light
   and 0.57–0.66 gamma-encoded, and its red tests only agree with the linear
   reading.
-- **Exact synchrony.** Areas flashing even one frame apart are measured
-  separately, as the test media requires. Real footage whose flashes spread
-  over two frames, such as a rolling shutter, may be measured as smaller areas
-  than a viewer perceives.
+- **Frame-exact concurrency.** A region transitions when enough of it
+  transitions in the same frame, as the test media requires. A flash whose
+  edge sweeps across a region over several frames, such as a rolling shutter,
+  is measured frame by frame and may count as a smaller area than a viewer
+  perceives.
 - **One display.** Luminance is relative (0 to 1). PSV does not model the
   display's brightness, HDR or viewing distance.
 - **Frame-based timing.** Timestamps are frame numbers. Convert variable frame

@@ -286,7 +286,7 @@ func analyze(t *testing.T, dir string, spec videoSpec, th psv.Thresholds, masks 
 		}
 	}
 
-	return a.Analysis()
+	return a.Finish()
 }
 
 // render composes frame n: the background, then every layer that has a
