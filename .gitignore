@@ -6,3 +6,4 @@ coverage.*
 .DS_Store
 /reference/
 /testdata/pse-test-media/
+/.claude/
