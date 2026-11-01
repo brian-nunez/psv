@@ -7,7 +7,7 @@ LDFLAGS  := -s -w -X main.version=$(VERSION)
 MEDIA_REF := ef78542aad496827f25064f57aaf13d6a741ba75
 MEDIA_DIR := testdata/pse-test-media
 
-.PHONY: all build install test testdata vet lint fmt fmt-check clean
+.PHONY: all build install test testdata vet lint fmt fmt-check clean prototype
 
 all: fmt-check lint build
 
@@ -40,6 +40,10 @@ fmt:
 
 fmt-check:
 	golangci-lint fmt --diff ./...
+
+# PROTOTYPE: throwaway report UI, see prototype/reportui.
+prototype:
+	go run ./prototype/reportui
 
 clean:
 	rm -rf bin dist
