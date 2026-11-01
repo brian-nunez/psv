@@ -86,6 +86,16 @@ The two rules together keep apart what the guidelines keep apart:
   two out of phase, still fail: in each frame enough of them transition
   together.
 
+### Where it flashes
+
+The region a frame reports is the area the threshold was measured in: a
+fixed-size rectangle, placed where most of it transitioned. It says which
+part of the screen failed, not the shape of what flashes. Failing frames
+therefore also report every flashing pixel that starts a transition in that
+frame, as a bounding box (`Flashes.Flashing`) and as its share of each cell of
+a 64×36 grid over the frame (`Flashes.Mask`). They cover the whole frame, so a
+flash larger than the region, or several flashes at once, are located in full.
+
 ### Deciding a frame takes a second
 
 Whether a pixel flashes depends on the second around a frame, including the

@@ -193,6 +193,15 @@ func (d *detector) finish(f *Flashes) {
 
 	f.Region.Min = f.Region.Min.Mul(d.factor)
 	f.Region.Max = f.Region.Max.Mul(d.factor)
+
+	if !f.Failed {
+		f.Flashing, f.Mask = image.Rectangle{}, nil
+
+		return
+	}
+
+	f.Flashing.Min = f.Flashing.Min.Mul(d.factor)
+	f.Flashing.Max = f.Flashing.Max.Mul(d.factor)
 }
 
 // lumaStep returns the direction of pixel i's luminance step from the
@@ -273,6 +282,9 @@ type channel struct {
 	times  []int32
 	head   []uint8
 	keep   int
+
+	// cellArea is the number of pixels in each cell of Flashes.Mask.
+	cellArea []int32
 }
 
 func newChannel(width, height, rw, rh, rate, maxTransitions int) *channel {
@@ -308,7 +320,20 @@ func newChannel(width, height, rw, rh, rate, maxTransitions int) *channel {
 		c.times[i] = math.MinInt32
 	}
 
+	c.cellArea = make([]int32, MaskColumns*MaskRows)
+
+	for y := range height {
+		for x := range width {
+			c.cellArea[c.cell(x, y)]++
+		}
+	}
+
 	return c
+}
+
+// cell returns the Flashes.Mask cell of picture pixel (x, y).
+func (c *channel) cell(x, y int) int {
+	return y*MaskRows/c.height*MaskColumns + x*MaskColumns/c.width
 }
 
 func (c *channel) pending(t int) []event {
@@ -515,12 +540,42 @@ func (c *channel) regions(f, now int, areaPercent float64) Flashes {
 		return Flashes{}
 	}
 
+	flashing, mask := c.locate(parts)
+
 	return Flashes{
 		Transitions: best.count,
 		Since:       best.since,
 		Region:      image.Rect(best.x, best.y, best.x+c.rw, best.y+c.rh),
 		Area:        float64(best.moved) * 100 / float64(area),
+		Flashing:    flashing,
+		Mask:        mask,
 	}
+}
+
+// locate returns the bounding box of the given transitions, in picture
+// pixels, and their share of each Flashes.Mask cell.
+func (c *channel) locate(parts [][]event) (image.Rectangle, []byte) {
+	var (
+		box    image.Rectangle
+		counts [MaskColumns * MaskRows]int32
+	)
+
+	for _, p := range parts {
+		for _, e := range p {
+			x, y := int(e.pixel)%c.width, int(e.pixel)/c.width
+			box = box.Union(image.Rect(x, y, x+1, y+1))
+			counts[c.cell(x, y)]++
+		}
+	}
+
+	mask := make([]byte, len(counts))
+	for i, n := range counts {
+		if n > 0 {
+			mask[i] = byte(max(1, (n*100+c.cellArea[i]/2)/c.cellArea[i]))
+		}
+	}
+
+	return box, mask
 }
 
 // record adds a transition of region position pos in frame f and returns the

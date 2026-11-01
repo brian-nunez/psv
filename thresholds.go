@@ -99,7 +99,22 @@ type Flashes struct {
 	Area float64 `json:"area"`
 	// Failed reports that the region flashed too often.
 	Failed bool `json:"failed"`
+	// Flashing is the bounding box, in source pixels, of the flashing pixels
+	// that start a transition in this frame, wherever they are in the frame.
+	// Unlike Region, it follows the shape of what flashes. It is set only
+	// when Failed.
+	Flashing image.Rectangle `json:"flashing"`
+	// Mask locates those pixels on a MaskColumns×MaskRows grid over the
+	// frame, row by row from the top left: each cell holds the share, 0 to
+	// 100, of its pixels that are among them. It is set only when Failed.
+	Mask []byte `json:"mask,omitempty"`
 }
+
+// MaskColumns and MaskRows are the size of the grid of Flashes.Mask.
+const (
+	MaskColumns = 64
+	MaskRows    = 36
+)
 
 // FrameResult is the analysis of one frame.
 type FrameResult struct {
