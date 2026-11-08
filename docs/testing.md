@@ -5,14 +5,17 @@ PSV is tested against the
 benchmark of 346 videos built to sit just above or just below each threshold of
 each standard.
 
+The benchmark is vendored in `testdata/pse-test-media` at commit `ef78542`,
+under its BSD 3-Clause license. Real-world example videos are in
+[`testdata/examples`](../testdata/examples/README.md).
+
 ## Running
 
 ```bash
 make test
 ```
 
-This downloads the media to `testdata/pse-test-media` (pinned to commit
-`ef78542`) and runs two passes:
+This runs two passes:
 
 1. The race detector over a representative subset (`go test -race -short`):
    luminance, red, area and synchronisation sets.

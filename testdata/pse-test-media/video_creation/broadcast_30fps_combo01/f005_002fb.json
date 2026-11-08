@@ -1,0 +1,84 @@
+{
+    "framerate": 30,
+    "colormodel": "sRGBA",
+    "bgcolor": "(102,102,102,255)",
+    "pattern": [
+        {
+            "spatial": "../../area_patterns/25pct_screen/f005_fhd.png",
+            "temporal_color": "../../combo_flash_patterns/30fps/002fb.csv"
+        }
+    ],
+    "expected_result": {
+        "trace24": "fail",
+        "wcag2_2": "fail",
+        "ofcom2017": "fail",
+        "itu_r1702_4": "fail",
+        "iso": "fail"
+    },
+    "events": {
+        "r1": {
+            "type": "red",
+            "firstFrame": 30,
+            "lastFrame": 31
+        },
+        "y1": {
+            "type": "luminance",
+            "firstFrame": 30,
+            "lastFrame": 31
+        }
+    },
+    "failure_details": {
+        "trace24": {
+            "red": {
+                "present": true,
+                "event_ids": ["r1"]
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        },
+        "wcag2_2": {
+            "red": {
+                "present": true,
+                "event_ids": ["r1"]
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        },
+        "ofcom2017": {
+            "red": {
+                "present": true,
+                "event_ids": ["r1"]
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        },
+        "itu_r1702_4": {
+            "red": {
+                "present": true,
+                "event_ids": ["r1"]
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        },
+        "iso": {
+            "red": {
+                "present": true,
+                "event_ids": ["r1"]
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        }
+    },
+
+    "version": "1.0"
+}

@@ -1,0 +1,74 @@
+{
+    "framerate": 30,
+    "colormodel": "sRGBA",
+    "bgcolor": "(124,124,124,255)",
+    "pattern": [
+        {
+            "spatial": "../../area_patterns/25pct_screen/f006_fhd.png",
+            "temporal_color": "../../lum_flash_patterns/rel_lum/fr002_srgba.csv"
+        }
+    ],
+    "expected_result": {
+        "trace24": "fail",
+        "wcag2_2": "fail",
+        "ofcom2017": "fail",
+        "itu_r1702_4": "fail",
+        "iso": "fail"
+    },
+    "events": {
+        "y1": {
+            "type": "luminance",
+            "firstFrame": 7,
+            "lastFrame": 30
+        }
+    },
+    "failure_details": {
+        "trace24": {
+            "red": {
+                "present": false
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        },
+        "wcag2_2": {
+            "red": {
+                "present": false
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        },
+        "ofcom2017": {
+            "red": {
+                "present": false
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        },
+        "itu_r1702_4": {
+            "red": {
+                "present": false
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        },
+        "iso": {
+            "red": {
+                "present": false
+            },
+            "luminance": {
+                "present": true,
+                "event_ids": ["y1"]
+            }
+        }
+    },
+
+    "version": "1.0"
+}
