@@ -19,14 +19,18 @@
   <img alt="Requires FFmpeg" src="https://img.shields.io/badge/requires-FFmpeg-1b2fb3?style=flat-square&logo=ffmpeg&logoColor=white">
   <img alt="Standards: WCAG 2.2, Trace 2024, broadcast" src="https://img.shields.io/badge/standards-WCAG%202.2%20%C2%B7%20Trace%202024%20%C2%B7%20broadcast-2346ff?style=flat-square">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-1b2fb3?style=flat-square">
+  <br>
+  <a href="https://github.com/brian-nunez/psv/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/brian-nunez/psv/ci.yml?branch=main&style=flat-square&label=CI&logo=githubactions&logoColor=white"></a>
+  <a href="https://github.com/brian-nunez/psv/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/brian-nunez/psv?style=flat-square&logo=github"></a>
 </p>
 
 <p align="center">
-  <a href="#quick-start"><img alt="Quick start" src="https://img.shields.io/badge/Quick%20start-2346FF?style=for-the-badge&logo=go&logoColor=white" height="40"></a>
+  <a href="https://github.com/brian-nunez/psv/releases/latest"><img alt="Download psv" src="https://img.shields.io/badge/Download%20psv-2346FF?style=for-the-badge&logo=github&logoColor=white" height="40"></a>
 </p>
 
 <p align="center">
-  <a href="#quick-start"><b>Quick start</b></a> ·
+  <a href="https://github.com/brian-nunez/psv/releases/latest"><b>Download</b></a> ·
+  <a href="#quick-start">Quick start</a> ·
   <a href="#report-ui">Report UI</a> ·
   <a href="#api-server">API server</a> ·
   <a href="docs/how-it-works.md">How it works</a> ·
@@ -69,6 +73,18 @@
 
 ## Quick start
 
+Download the binary for your platform from the [latest release](https://github.com/brian-nunez/psv/releases/latest). Each release has `psv-<os>-<arch>` for Linux, macOS and Windows on amd64 and arm64, and `SHA256SUMS`:
+
+```sh
+curl -fLO https://github.com/brian-nunez/psv/releases/latest/download/psv-darwin-arm64
+curl -fLO https://github.com/brian-nunez/psv/releases/latest/download/SHA256SUMS
+shasum -a 256 -c --ignore-missing SHA256SUMS   # psv-darwin-arm64: OK
+chmod +x psv-darwin-arm64 && mv psv-darwin-arm64 /usr/local/bin/psv
+psv -version                                   # psv v0.1.0
+```
+
+Or build from source:
+
 ```sh
 make build                     # build bin/psv
 ./bin/psv video.mp4            # check a video against WCAG 2.2
@@ -78,8 +94,8 @@ make install                   # or install psv to $GOPATH/bin
 
 Requirements:
 
-- Go 1.25 or later
 - `ffmpeg` and `ffprobe` on `PATH`, or passed with `-ffmpeg` and `-ffprobe`
+- To build from source: Go 1.25 or later
 - For development: [golangci-lint](https://golangci-lint.run) v2
 
 ## Usage
@@ -305,6 +321,8 @@ The test media is vendored in `testdata/pse-test-media`, and real-world example 
 - [How it works](docs/how-it-works.md): the detection model, its design choices and its limits.
 - [Testing](docs/testing.md): the conformance suite and how it is scored.
 - [Examples](testdata/examples/README.md): the real-world example videos and their reports.
+- [Architecture decisions](docs/adr/README.md): the report format, the core package and how the CLI, API and UI build on it.
+- [AGENTS.md](AGENTS.md): layout, commands, conventions and boundaries for contributors and coding agents.
 
 ## Development
 
