@@ -1,0 +1,27 @@
+# Normalize line endings; LF in the repository and the working tree.
+* text=auto eol=lf
+
+# Windows scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets: no diff, no merge, no normalization.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.woff binary
+*.woff2 binary
+*.mp4 binary
+*.figcraft binary
+
+# Third-party benchmark media, vendored at a fixed commit.
+testdata/pse-test-media/** linguist-vendored
+
+# Design mockups and their generator scripts, not product code.
+design/** linguist-documentation
