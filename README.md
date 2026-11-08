@@ -108,7 +108,7 @@ A defect is a run of frames covered by failing flash sequences, from the first t
 | --- | --- | --- |
 | `-standard` | `wcag22` | Threshold preset: `wcag22`, `trace24`, `broadcast` or `scene` |
 | `-format` | `text` | `text` summary or `json` report |
-| `-frames` | off | Include every frame's result in JSON output |
+| `-frames` | off | Include every frame's result in JSON output, which `psv render` needs |
 | `-fps` | `0` | Convert the video to this frame rate before analysis |
 | `-deinterlace` | off | Deinterlace frames flagged as interlaced |
 | `-progress` | on in a terminal | Show progress on stderr |
@@ -181,7 +181,20 @@ With `-frames`, `results` adds one entry per frame. Each entry has `luminance` a
 
 Failing frames also locate what flashes, wherever it is in the frame: `flashing` is the bounding box, in source pixels, of the flashing pixels that start a transition in that frame, and `mask` (base64) gives their share, 0 to 100, of each cell of a 64×36 grid over the frame, row by row from the top left. Unlike `region`, which is the fixed-size area the threshold is measured in, these follow the shape of the flashing.
 
-`standard` is the preset name, or `custom` when threshold flags change it.
+`standard` is the preset name, or `custom` when threshold flags change it. `psv render` and the report UI accept only `psv.report/v1` documents.
+
+## Report UI
+
+One report UI shows every report, whichever frontend made it.
+
+```sh
+psv -format json -frames video.mp4 > report.json
+psv render report.json > report.html      # a self-contained page of the report UI
+psv render -open report.json              # write it to a temporary file and open it
+psv -format json -frames video.mp4 | psv render -o report.html
+```
+
+The page needs the per-frame results that `-frames` adds. To see the frames themselves, attach the video in the page; it stays in the browser.
 
 ## Report prototype
 

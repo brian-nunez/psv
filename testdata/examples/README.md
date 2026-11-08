@@ -37,3 +37,9 @@ current build and review the difference:
 make examples
 git diff --stat testdata/examples
 ```
+
+To view one in the report UI:
+
+```sh
+./bin/psv render -open testdata/examples/electric-soldier-porygon-strobes/report.json
+```
