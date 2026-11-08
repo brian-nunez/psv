@@ -41,8 +41,8 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/cli.png" alt="Terminal running psv on the same test clip: result Failed, 600 frames at 30 fps, three defects with their frames, times and flash types, and exit status 1" width="80%">
-  <br><sub><b>Command line</b>: a generated test clip through <code>psv</code>, with exit status 1 for a failed video.</sub>
+  <img src="docs/images/cli.png" alt="Terminal running psv on testdata/examples/colors-epilepsy-warning/video.mp4: result Failed, 598 frames at 30 fps, 1920x1080, 392 luminance and 392 red failing frames, one defect over frames 2-598, and exit status 1" width="80%">
+  <br><sub><b>Command line</b>: one of the repository's example videos through <code>psv</code>, with exit status 1 for a failed video.</sub>
 </p>
 
 > [!NOTE]
@@ -85,25 +85,23 @@ Requirements:
 ## Usage
 
 ```bash
-./bin/psv video.mp4
+./bin/psv testdata/examples/colors-epilepsy-warning/video.mp4
 ```
 
 ```text
 Result:                    Failed
 Frame rate:                30 fps
-Length:                    20s (600 frames)
-Video size:                1280x720
-Luminance flash failures:  72 frames
-Red flash failures:        24 frames
+Length:                    19.933s (598 frames)
+Video size:                1920x1080
+Luminance flash failures:  392 frames
+Red flash failures:        392 frames
 
-Defects: 3
-  #  Frames   Time           Luminance  Red
-  1  93-167   3.07s-5.57s    X
-  2  273-331  9.07s-11.03s   X          X
-  3  453-495  15.07s-16.50s  X
+Defects: 1
+  #  Frames  Time          Luminance  Red
+  1  2-598   0.03s-19.93s  X          X
 ```
 
-A defect is a run of frames covered by failing flash sequences, from the first transition of a sequence to the frame that completes it.
+The video is one of the [example videos](testdata/examples): every frame is solid green, red or blue in turn, one colour per frame. A defect is a run of frames covered by failing flash sequences, from the first transition of a sequence to the frame that completes it.
 
 ### Flags
 
@@ -140,21 +138,24 @@ Threshold flags override single values of the chosen preset.
 
 ## JSON report
 
-`-format json` prints the full report in the `psv.report/v1` format, which the API returns too:
+`-format json` prints the full report in the `psv.report/v1` format, which the API returns too. For the same video:
 
 ```json
 {
   "schema": "psv.report/v1",
-  "tool": { "name": "psv", "version": "9c1fefd" },
+  "tool": {
+    "name": "psv",
+    "version": "9c1fefd"
+  },
   "source": "video.mp4",
   "standard": "wcag22",
   "verdict": "Failed",
   "passed": false,
   "frameRate": 30,
-  "frames": 600,
-  "durationSeconds": 20,
-  "width": 1280,
-  "height": 720,
+  "frames": 598,
+  "durationSeconds": 19.933333333,
+  "width": 1920,
+  "height": 1080,
   "thresholds": {
     "luminanceChange": 0.1,
     "darkLimit": 0.8,
@@ -165,16 +166,19 @@ Threshold flags override single values of the chosen preset.
     "areaPercent": 25,
     "maxTransitions": 6
   },
-  "failures": { "luminance": 72, "red": 24 },
+  "failures": {
+    "luminance": 392,
+    "red": 392
+  },
   "defects": [
     {
-      "firstFrame": 93,
-      "lastFrame": 167,
+      "firstFrame": 2,
+      "lastFrame": 598,
       "luminance": true,
-      "red": false,
+      "red": true,
       "index": 1,
-      "startSeconds": 3.066666666,
-      "endSeconds": 5.566666666
+      "startSeconds": 0.033333333,
+      "endSeconds": 19.933333333
     }
   ]
 }
@@ -184,7 +188,7 @@ With `-frames`, `results` adds one entry per frame. Each entry has `luminance` a
 
 Failing frames also locate what flashes, wherever it is in the frame: `flashing` is the bounding box, in source pixels, of the flashing pixels that start a transition in that frame, and `mask` (base64) gives their share, 0 to 100, of each cell of a 64×36 grid over the frame, row by row from the top left. Unlike `region`, which is the fixed-size area the threshold is measured in, these follow the shape of the flashing.
 
-`tool.version` is the build's version: the `git describe` output for `make build`, or `dev`. `standard` is the preset name, or `custom` when threshold flags change it. `psv render` and the report UI accept only `psv.report/v1` documents.
+`tool.version` is the version of the build that made the report: `make build` stamps the `git describe` output (here the commit `9c1fefd`, as no release is tagged), and a plain `go build` reports `dev`. `standard` is the preset name, or `custom` when threshold flags change it. `psv render` and the report UI accept only `psv.report/v1` documents.
 
 ## Report UI
 
@@ -225,21 +229,24 @@ The page needs the per-frame results that `-frames` adds. To see the frames them
 
 | Endpoint | Description |
 | --- | --- |
-| `POST /v1/analyses?standard=wcag22&name=clip.mp4` | The video is the request body; the response is newline-delimited JSON events |
+| `POST /v1/analyses?standard=wcag22&name=video.mp4` | The video is the request body; the response is newline-delimited JSON events |
 | `GET /healthz` | `{"status":"ok"}` |
 | `GET /` | The report UI |
 
 ```sh
-curl -sN --data-binary @clip.mp4 'http://127.0.0.1:8080/v1/analyses?name=clip.mp4'
+curl -sN --data-binary @testdata/examples/colors-epilepsy-warning/video.mp4 'http://127.0.0.1:8080/v1/analyses?name=video.mp4'
 ```
 
 ```text
 {"type":"received","bytes":45713}
-{"type":"progress","frame":120,"total":598}
-{"type":"report","report":{"schema":"psv.report/v1", ...}}
+{"type":"progress","frame":1,"total":598}
+{"type":"progress","frame":8,"total":598}
+…
+{"type":"progress","frame":598,"total":598}
+{"type":"report","report":{"schema":"psv.report/v1","tool":{"name":"psv","version":"9c1fefd"},…
 ```
 
-`received` comes once the upload is stored, `progress` while frames are analysed (without `total` when the container does not declare a frame count), and the stream ends with `report` or `error`.
+That run sent 146 lines: `received` once the upload is stored, 144 `progress` events while frames are analysed, sent at most every 100 ms and for the last frame (without `total` when the container does not declare a frame count), and the `report`, shortened here; a failed analysis ends with `error` instead.
 
 The report has per-frame results, so it can be saved and passed to `psv render`. Problems found before the analysis starts are answered with an error status and a JSON `{"error": ...}` body: `400` for an unknown standard or an empty body, `413` past the upload limit, `422` for a file FFmpeg cannot read and `429` when `-max-jobs` analyses are already running. A failure after that ends the stream with a `{"type":"error","error":...}` event. Closing the connection cancels the analysis.
 
