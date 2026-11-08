@@ -19,18 +19,10 @@ import (
 	"github.com/brian-nunez/psv"
 )
 
-const examples = "../../testdata/examples"
-
-// example returns the example analysed end to end: a 20-second video that
-// fails WCAG 2.2, or under -short, where the race detector slows decoding, a
-// 5-second one that passes.
-func example() string {
-	if testing.Short() {
-		return filepath.Join(examples, "video-ad-sample-2")
-	}
-
-	return filepath.Join(examples, "colors-epilepsy-warning")
-}
+// The small generated clips in testdata/clips: these tests check the API's
+// wiring, not the detection, which the conformance suite and the example
+// videos cover.
+const clips = "../../testdata/clips"
 
 func needFFmpeg(t *testing.T) {
 	t.Helper()
@@ -110,11 +102,11 @@ func assertEmpty(t *testing.T, dir string) {
 func TestAnalyzeStreamsReport(t *testing.T) {
 	needFFmpeg(t)
 
-	dir, video := t.TempDir(), example()
+	dir, video := t.TempDir(), filepath.Join(clips, "fail.mp4")
 	_, ts := newTestServer(t, Config{Version: "test", TempDir: dir})
 
-	res := post(context.Background(), t, ts.URL+"/v1/analyses?standard=wcag22&name=colors.mp4",
-		bytes.NewReader(readFile(t, filepath.Join(video, "video.mp4"))))
+	res := post(context.Background(), t, ts.URL+"/v1/analyses?standard=wcag22&name=clip.mp4",
+		bytes.NewReader(readFile(t, video)))
 	defer func() { _ = res.Body.Close() }()
 
 	if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "application/x-ndjson" {
@@ -149,7 +141,7 @@ func TestAnalyzeStreamsReport(t *testing.T) {
 	}
 
 	got := last.Report
-	if got.Schema != psv.ReportSchema || got.Tool.Version != "test" || got.Source != "colors.mp4" || got.Standard != "wcag22" {
+	if got.Schema != psv.ReportSchema || got.Tool.Version != "test" || got.Source != "clip.mp4" || got.Standard != "wcag22" {
 		t.Errorf("report header %q %+v %q %q", got.Schema, got.Tool, got.Source, got.Standard)
 	}
 
@@ -157,20 +149,17 @@ func TestAnalyzeStreamsReport(t *testing.T) {
 		t.Errorf("%d per-frame results for %d frames", len(got.Results), got.Frames)
 	}
 
-	f, err := os.Open(filepath.Join(video, "report.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = f.Close() }()
-
-	want, err := psv.DecodeReport(f)
+	// The API must report exactly what the library reports for the same file.
+	analysis, err := psv.AnalyzeFile(context.Background(), video, psv.Options{Config: psv.Config{Thresholds: psv.WCAG22()}})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if got.Verdict != want.Verdict || !reflect.DeepEqual(got.Defects, want.Defects) || got.Failures != want.Failures {
-		t.Errorf("API report differs from the CLI report: verdict %v/%v, defects %+v/%+v",
-			got.Verdict, want.Verdict, got.Defects, want.Defects)
+	want := analysis.Report(true)
+	if got.Verdict != psv.Fail || got.Verdict != want.Verdict || got.Failures != want.Failures ||
+		!reflect.DeepEqual(got.Defects, want.Defects) || !reflect.DeepEqual(got.Results, want.Results) {
+		t.Errorf("API report differs from the library's: verdict %v/%v, failures %+v/%+v, defects %+v/%+v",
+			got.Verdict, want.Verdict, got.Failures, want.Failures, got.Defects, want.Defects)
 	}
 
 	assertEmpty(t, dir)
@@ -241,7 +230,7 @@ func TestAnalyzeCancelledByClient(t *testing.T) {
 	defer cancel()
 
 	res := post(ctx, t, ts.URL+"/v1/analyses",
-		bytes.NewReader(readFile(t, filepath.Join(examples, "electric-soldier-porygon-strobes", "video.mp4"))))
+		bytes.NewReader(readFile(t, filepath.Join(clips, "long.mp4"))))
 
 	line, err := bufio.NewReader(res.Body).ReadBytes('\n')
 	if err != nil || !bytes.Contains(line, []byte(`"received"`)) {

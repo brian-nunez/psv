@@ -16,11 +16,15 @@ import (
 // its last accepted analysis. TestExamples decodes them with FFmpeg and checks
 // the analysis still matches; `make examples` regenerates the reports after
 // an intended change in results.
+//
+// Decoding full-resolution footage is slow, so TestExamples runs only when
+// PSV_TEST_EXAMPLES is set: `make test-examples` locally, or the Examples
+// workflow in CI, which runs one job per video.
 const examplesDir = "testdata/examples"
 
 func TestExamples(t *testing.T) {
-	if testing.Short() {
-		t.Skip("decoding the example videos is slow under -short -race")
+	if os.Getenv("PSV_TEST_EXAMPLES") == "" {
+		t.Skip("set PSV_TEST_EXAMPLES=1, or run make test-examples, to decode the full-resolution example videos")
 	}
 
 	if _, err := exec.LookPath("ffmpeg"); err != nil {

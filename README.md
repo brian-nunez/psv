@@ -275,7 +275,7 @@ PSV runs against the 346 videos of the [Trace RERC PSE test media](https://githu
 make test                                    # run every test
 go test -run TestConformance .               # the conformance suite alone
 go test -run 'TestConformance/wcag22/' .     # one standard
-go test -run TestExamples .                  # the real-world example videos
+make test-examples                           # the full-resolution example videos
 ```
 
 The test media is vendored in `testdata/pse-test-media`, and real-world example videos with their reports are in [`testdata/examples`](testdata/examples).
@@ -290,11 +290,28 @@ The test media is vendored in `testdata/pse-test-media`, and real-world example 
 ```sh
 make all                       # format check, lint, build
 make test                      # run the race detector on a subset, then every test
+make test-examples             # decode the full-resolution example videos
+make clips                     # regenerate the small test clips
 make serve                     # build and run the API server and report UI
 make examples                  # regenerate the example reports
 make lint                      # run golangci-lint
 make fmt                       # format and apply lint fixes
+make release                   # build every release binary and SHA256SUMS into dist/
 ```
+
+### Releases
+
+Releases are made by GitHub Actions, not from a local machine. The [CI workflow](.github/workflows/ci.yml) checks formatting, lint, vet and `make test` on each pull request and push to `main`, decoding the small clips in [`testdata/clips`](testdata/clips); the [Examples workflow](.github/workflows/examples.yml) decodes the full-resolution example videos on demand, one job per video. When CI passes on `main`, the [Release workflow](.github/workflows/release.yml) works out the next version from the [Conventional Commits](https://www.conventionalcommits.org/) since the last tag with [`scripts/next-version.sh`](scripts/next-version.sh), builds `psv` for Linux, macOS and Windows on amd64 and arm64, and publishes them with `SHA256SUMS` as a GitHub release.
+
+| Commits since the last tag | Next version |
+| --- | --- |
+| None tagged yet | `v0.1.0` |
+| A breaking change (`type!:` or a `BREAKING CHANGE:` footer) | Next major |
+| `feat` | Next minor |
+| `fix`, `perf`, `refactor`, `build`, `revert` or any other subject | Next patch |
+| Only `docs`, `ci`, `chore`, `test` or `style` | No release |
+
+`psv -version` prints the release's tag. A local `make build` stamps `git describe`, so between releases it shows the last tag, the commits since it and the commit.
 
 ## License
 

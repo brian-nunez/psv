@@ -13,11 +13,14 @@ import (
 	"github.com/brian-nunez/psv/internal/ui"
 )
 
-const examples = "../../testdata/examples"
+// The small generated clips in testdata/clips: these tests check the CLI's
+// wiring, not the detection, which the conformance suite and the example
+// videos cover.
+const clips = "../../testdata/clips"
 
 var (
-	passing = filepath.Join(examples, "video-ad-sample-2", "video.mp4")
-	failing = filepath.Join(examples, "colors-epilepsy-warning", "video.mp4")
+	passing = filepath.Join(clips, "pass.mp4")
+	failing = filepath.Join(clips, "fail.mp4")
 )
 
 func needFFmpeg(t *testing.T) {
@@ -48,19 +51,12 @@ func TestAnalyzeExitStatus(t *testing.T) {
 	}{
 		{"pass", []string{"-progress=false", passing}, exitPass},
 		{"pass, analyze command", []string{"analyze", "-progress=false", passing}, exitPass},
+		{"fail", []string{"-progress=false", failing}, exitFail},
 		{"missing file", []string{"-progress=false", "no-such-video.mp4"}, exitError},
 		{"no video", []string{}, exitError},
 		{"unknown flag", []string{"-nope", passing}, exitError},
 		{"unknown standard", []string{"-standard", "nope", passing}, exitError},
 		{"unknown format", []string{"-format", "xml", passing}, exitError},
-	}
-
-	if !testing.Short() {
-		cases = append(cases, struct {
-			name string
-			args []string
-			code int
-		}{"fail", []string{"-progress=false", failing}, exitFail})
 	}
 
 	for _, c := range cases {
@@ -85,7 +81,7 @@ func TestAnalyzeJSONReport(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if rep.Tool.Name != "psv" || rep.Tool.Version != version || rep.Source != "video.mp4" || rep.Standard != "wcag22" {
+	if rep.Tool.Name != "psv" || rep.Tool.Version != version || rep.Source != "pass.mp4" || rep.Standard != "wcag22" {
 		t.Errorf("header %+v %q %q", rep.Tool, rep.Source, rep.Standard)
 	}
 
@@ -100,13 +96,14 @@ func TestAnalyzeJSONReport(t *testing.T) {
 	}
 }
 
-// TestRenderShowsReportUI pipes an analysis into psv render and checks the
-// page is the report UI with the report inlined.
+// TestRenderShowsReportUI pipes the analysis of a failing clip, which has
+// flashing masks to show, into psv render and checks the page is the report UI
+// with the report inlined.
 func TestRenderShowsReportUI(t *testing.T) {
 	needFFmpeg(t)
 
-	code, report, stderr := runPSV(t, nil, "-progress=false", "-format", "json", "-frames", passing)
-	if code != exitPass {
+	code, report, stderr := runPSV(t, nil, "-progress=false", "-format", "json", "-frames", failing)
+	if code != exitFail {
 		t.Fatalf("analysis exit %d: %s", code, stderr)
 	}
 
@@ -120,7 +117,7 @@ func TestRenderShowsReportUI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(page, string(js)) || !strings.Contains(page, `id="psv-report"`) || !strings.Contains(page, `"video.mp4"`) {
+	if !strings.Contains(page, string(js)) || !strings.Contains(page, `id="psv-report"`) || !strings.Contains(page, `"fail.mp4"`) {
 		t.Error("rendered page lacks the report UI script or the report")
 	}
 

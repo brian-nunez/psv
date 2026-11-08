@@ -1,0 +1,55 @@
+name: Examples
+
+# Decodes the full-resolution example videos in testdata/examples and checks each analysis against
+# its committed report (TestExamples). It is slow, so it runs on demand rather than on every pull
+# request; CI uses the small clips in testdata/clips. Every example folder gets its own job.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    name: List example videos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      examples: ${{ steps.list.outputs.examples }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: List example folders
+        id: list
+        run: |
+          examples=$(find testdata/examples -mindepth 2 -maxdepth 2 -name video.mp4 -exec dirname {} \; \
+            | xargs -n 1 basename | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "examples=$examples" >> "$GITHUB_OUTPUT"
+          echo "$examples"
+
+  test:
+    name: ${{ matrix.example }}
+    needs: list
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        example: ${{ fromJSON(needs.list.outputs.examples) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+          ffmpeg -version | head -n 1
+
+      - name: Test ${{ matrix.example }}
+        env:
+          EXAMPLE: ${{ matrix.example }}
+        run: make test-examples EXAMPLE="$EXAMPLE"
