@@ -1,14 +1,40 @@
 package psv
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"text/tabwriter"
 	"time"
 )
 
-// Report summarises an analysis for presentation.
+// ReportSchema identifies the format of a JSON report.
+const ReportSchema = "psv.report/v1"
+
+// ErrReportSchema is returned when decoding a document that is not a
+// ReportSchema report.
+var ErrReportSchema = errors.New("psv: not a " + ReportSchema + " report")
+
+// Tool names the program that produced a report.
+type Tool struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+// Report summarises an analysis for presentation. Its JSON encoding is the
+// ReportSchema format shared by every PSV frontend.
 type Report struct {
+	// Schema is ReportSchema.
+	Schema string `json:"schema"`
+	// Tool is the program that produced the report.
+	Tool Tool `json:"tool"`
+	// Source names the analysed video, typically its file name.
+	Source string `json:"source,omitempty"`
+	// Standard names the threshold preset, such as wcag22, when one was
+	// used.
+	Standard string `json:"standard,omitempty"`
+
 	Verdict         Verdict        `json:"verdict"`
 	Passed          bool           `json:"passed"`
 	FrameRate       int            `json:"frameRate"`
@@ -44,6 +70,8 @@ type FrameReport struct {
 func (a *Analysis) Report(perFrame bool) Report {
 	verdict := a.Verdict()
 	rep := Report{
+		Schema:          ReportSchema,
+		Tool:            Tool{Name: "psv"},
 		Verdict:         verdict,
 		Passed:          verdict.Passed(),
 		FrameRate:       a.FrameRate,
@@ -73,6 +101,21 @@ func (a *Analysis) Report(perFrame bool) Report {
 	}
 
 	return rep
+}
+
+// DecodeReport reads a JSON report and checks that it is a ReportSchema
+// report.
+func DecodeReport(r io.Reader) (*Report, error) {
+	var rep Report
+	if err := json.NewDecoder(r).Decode(&rep); err != nil {
+		return nil, fmt.Errorf("psv: decode report: %w", err)
+	}
+
+	if rep.Schema != ReportSchema {
+		return nil, fmt.Errorf("%w (schema %q)", ErrReportSchema, rep.Schema)
+	}
+
+	return &rep, nil
 }
 
 // WriteText writes the report as plain text.

@@ -1,5 +1,8 @@
 // Command psv is the Photosafety Validator command-line tool. It analyses a
-// video for flashing that can trigger photosensitive seizures.
+// video for flashing that can trigger photosensitive seizures and writes
+// the result as text or a psv.report/v1 JSON report.
+//
+//	psv [analyze] [flags] <video>
 //
 // It exits with status 0 when the video passes, 1 when it fails and 2 on
 // error.
@@ -14,8 +17,10 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 
 	"github.com/brian-nunez/psv"
+	"github.com/brian-nunez/psv/internal/standards"
 )
 
 var version = "dev"
@@ -26,19 +31,30 @@ const (
 	exitError = 2
 )
 
+const usage = `usage: psv [analyze] [flags] <video>
+`
+
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func run(args []string, _ io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "analyze" {
+		return analyze(args[1:], stdout, stderr)
+	}
+
+	return analyze(args, stdout, stderr)
+}
+
+func analyze(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("psv", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
-		printf(stderr, "usage: psv [flags] <video>\n\nflags:\n")
+		printf(stderr, "%s\nanalyze flags:\n", usage)
 		fs.PrintDefaults()
 	}
 
-	standard := fs.String("standard", "wcag22", "threshold preset: wcag22, trace24, broadcast or scene")
+	standard := fs.String("standard", standards.Default, "threshold preset: wcag22, trace24, broadcast or scene")
 	fps := fs.Int("fps", 0, "convert the video to this frame rate before analysis")
 	deinterlace := fs.Bool("deinterlace", false, "deinterlace frames flagged as interlaced")
 	lumChange := fs.Float64("luminance-change", 0, "relative luminance change of a luminance transition, 0 to 1")
@@ -48,7 +64,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	area := fs.Float64("area", 0, "share of a region, in percent, that must flash together")
 	region := fs.String("region", "", "size of the area region, WIDTHxHEIGHT pixels, or 0x0 for the whole frame")
 	transitions := fs.Int("transitions", -1, "most alternating transitions allowed in any one second")
-	format := fs.String("format", "text", "output format: text or json")
+	format := fs.String("format", "text", "output format: text or json (a psv.report/v1 report)")
 	frames := fs.Bool("frames", false, "include every frame's result in JSON output")
 	progress := fs.Bool("progress", isTerminal(os.Stderr), "show progress on stderr")
 	ffmpeg := fs.String("ffmpeg", "", "path to ffmpeg (default: found on PATH)")
@@ -102,7 +118,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	analysis, err := psv.AnalyzeFile(ctx, fs.Arg(0), opts)
+	path := fs.Arg(0)
+	analysis, err := psv.AnalyzeFile(ctx, path, opts)
 
 	if *progress {
 		printf(stderr, "\n")
@@ -115,6 +132,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	report := analysis.Report(*frames)
+	report.Tool.Version = version
+	report.Source = filepath.Base(path)
+	report.Standard = *standard
+
+	if preset, _ := standards.Lookup(*standard); th != preset {
+		report.Standard = "custom"
+	}
 
 	if err := write(stdout, *format, &report); err != nil {
 		printf(stderr, "%v\n", err)
@@ -132,19 +156,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 // thresholds starts from a standard's preset and applies the flags that were
 // set; zero and negative values keep the preset.
 func thresholds(standard string, lumChange, darkLimit, redChange, redSaturation, area float64, region string, transitions int) (psv.Thresholds, error) {
-	var th psv.Thresholds
-
-	switch standard {
-	case "wcag22":
-		th = psv.WCAG22()
-	case "trace24":
-		th = psv.Trace24()
-	case "broadcast":
-		th = psv.Broadcast()
-	case "scene":
-		th = psv.SceneChange()
-	default:
-		return th, fmt.Errorf("unknown standard %q", standard)
+	th, err := standards.Lookup(standard)
+	if err != nil {
+		return th, err
 	}
 
 	for _, o := range []struct {
