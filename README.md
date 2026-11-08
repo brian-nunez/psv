@@ -30,6 +30,7 @@
 
 <p align="center">
   <a href="https://github.com/brian-nunez/psv/releases/latest"><b>Download</b></a> ·
+  <a href="https://psv.b8z.me/"><b>Website</b></a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#report-ui">Report UI</a> ·
   <a href="#api-server">API server</a> ·

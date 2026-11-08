@@ -4,6 +4,7 @@
 #   make test                   race detector on a subset, then every test (CI runs this)
 #   make test-examples          the full-resolution example videos (CI runs these on demand)
 #   make release VERSION=vX.Y.Z clean dist/, build every platform and write dist/SHA256SUMS
+#   make site                   the project site in _site/ (GitHub Actions publishes it to Pages)
 #
 # Releases are made by GitHub Actions (.github/workflows/release.yml), not from a local machine.
 
@@ -17,8 +18,9 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 win
 
 # Real-world example videos and their reports, see testdata/examples.
 EXAMPLES := $(wildcard testdata/examples/*/video.mp4)
+REPORTS  := $(wildcard testdata/examples/*/report.json)
 
-.PHONY: all build install test test-examples test-scripts examples clips serve vet lint fmt fmt-check release clean
+.PHONY: all build install test test-examples test-scripts examples clips serve site vet lint fmt fmt-check release clean
 
 all: fmt-check lint build
 
@@ -66,6 +68,17 @@ clips:
 serve: build
 	./bin/$(BINARY) serve
 
+# The project site: site/ plus a psv render page of every committed example report. No video is
+# analysed or copied. .github/workflows/pages.yml publishes the result to GitHub Pages.
+site: build
+	rm -rf _site
+	mkdir -p _site/reports
+	cp -R site/. _site/
+	@for r in $(REPORTS); do \
+		n=$$(basename $$(dirname $$r)); echo "rendering $$n"; \
+		./bin/$(BINARY) render -o _site/reports/$$n.html $$r || exit 2; \
+	done
+
 vet:
 	go vet ./...
 
@@ -92,4 +105,4 @@ release:
 	@cat dist/SHA256SUMS
 
 clean:
-	rm -rf bin dist
+	rm -rf bin dist _site
