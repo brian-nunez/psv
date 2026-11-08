@@ -230,12 +230,12 @@ verdict := a.Finish().Verdict()
 PSV runs against the 346 videos of the [Trace RERC PSE test media](https://github.com/traceRERC/pse-test-media). A set built for several standards runs once per preset, which makes 378 checks: 369 pass, 0 fail and 9 are skipped because their listing entries contradict the thresholds they test. Each skip is explained in the [testing guide](docs/testing.md#upstream-errors).
 
 ```bash
-make test                                    # fetch the test media, then run every test
+make test                                    # run every test
 go test -run TestConformance .               # the conformance suite alone
 go test -run 'TestConformance/wcag22/' .     # one standard
 ```
 
-The test media is downloaded to `testdata/pse-test-media` on the first `make test`, pinned to a fixed commit.
+The test media is vendored in `testdata/pse-test-media`, pinned to commit `ef78542`.
 
 ## Documentation
 
@@ -246,7 +246,7 @@ The test media is downloaded to `testdata/pse-test-media` on the first `make tes
 
 ```sh
 make all                       # format check, lint, build
-make test                      # fetch the test media, run the race detector on a subset, then every test
+make test                      # run the race detector on a subset, then every test
 make lint                      # run golangci-lint
 make fmt                       # format and apply lint fixes
 ```
