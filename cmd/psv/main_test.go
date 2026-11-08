@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/brian-nunez/psv"
+	"github.com/brian-nunez/psv/internal/ui"
 )
 
 const examples = "../../testdata/examples"
@@ -94,5 +97,76 @@ func TestAnalyzeJSONReport(t *testing.T) {
 
 	if rep, err = psv.DecodeReport(strings.NewReader(out)); err != nil || rep.Standard != "custom" {
 		t.Errorf("overridden thresholds: standard %q, %v; want custom", rep.Standard, err)
+	}
+}
+
+// TestRenderShowsReportUI pipes an analysis into psv render and checks the
+// page is the report UI with the report inlined.
+func TestRenderShowsReportUI(t *testing.T) {
+	needFFmpeg(t)
+
+	code, report, stderr := runPSV(t, nil, "-progress=false", "-format", "json", "-frames", passing)
+	if code != exitPass {
+		t.Fatalf("analysis exit %d: %s", code, stderr)
+	}
+
+	code, page, stderr := runPSV(t, []byte(report), "render")
+	if code != exitPass {
+		t.Fatalf("render exit %d: %s", code, stderr)
+	}
+
+	js, err := fs.ReadFile(ui.Files, "app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(page, string(js)) || !strings.Contains(page, `id="psv-report"`) || !strings.Contains(page, `"video.mp4"`) {
+		t.Error("rendered page lacks the report UI script or the report")
+	}
+
+	// The same page from a file, written with -o.
+	dir := t.TempDir()
+	in, out := filepath.Join(dir, "report.json"), filepath.Join(dir, "report.html")
+
+	if err := os.WriteFile(in, []byte(report), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if code, _, stderr := runPSV(t, nil, "render", "-o", out, in); code != exitPass {
+		t.Fatalf("render -o exit %d: %s", code, stderr)
+	}
+
+	written, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(written) != page {
+		t.Error("render -o wrote a different page than standard output")
+	}
+}
+
+func TestRenderRejects(t *testing.T) {
+	needFFmpeg(t)
+
+	_, summary, _ := runPSV(t, nil, "-progress=false", "-format", "json", passing)
+
+	for _, c := range []struct {
+		name, stdin string
+		args        []string
+		error       string
+	}{
+		{"no per-frame results", summary, []string{"render"}, "-frames"},
+		{"other JSON", `{"schemaVersion":"1.0"}`, []string{"render"}, "psv.report/v1"},
+		{"not JSON", "hello", []string{"render", "-"}, "decode report"},
+		{"missing file", "", []string{"render", "no-such-report.json"}, "no-such-report.json"},
+		{"two files", "", []string{"render", "a.json", "b.json"}, "usage"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			code, out, stderr := runPSV(t, []byte(c.stdin), c.args...)
+			if code != exitError || out != "" || !strings.Contains(stderr, c.error) {
+				t.Errorf("exit %d, stdout %d bytes, stderr %q; want exit 2 naming %q", code, len(out), stderr, c.error)
+			}
+		})
 	}
 }

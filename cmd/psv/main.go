@@ -1,11 +1,12 @@
 // Command psv is the Photosafety Validator command-line tool. It analyses a
-// video for flashing that can trigger photosensitive seizures and writes
-// the result as text or a psv.report/v1 JSON report.
+// video for flashing that can trigger photosensitive seizures and renders
+// psv.report/v1 reports in the report UI.
 //
-//	psv [analyze] [flags] <video>
+//	psv [analyze] [flags] <video>      analyse a video
+//	psv render [flags] [report.json]   write a report as a report UI page
 //
-// It exits with status 0 when the video passes, 1 when it fails and 2 on
-// error.
+// Analysis exits with status 0 when the video passes, 1 when it fails and 2
+// on error; the other commands exit with 0 or 2.
 package main
 
 import (
@@ -32,15 +33,21 @@ const (
 )
 
 const usage = `usage: psv [analyze] [flags] <video>
+       psv render [flags] [report.json | -]
 `
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-func run(args []string, _ io.Reader, stdout, stderr io.Writer) int {
-	if len(args) > 0 && args[0] == "analyze" {
-		return analyze(args[1:], stdout, stderr)
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 {
+		switch args[0] {
+		case "analyze":
+			return analyze(args[1:], stdout, stderr)
+		case "render":
+			return render(args[1:], stdin, stdout, stderr)
+		}
 	}
 
 	return analyze(args, stdout, stderr)
@@ -65,7 +72,7 @@ func analyze(args []string, stdout, stderr io.Writer) int {
 	region := fs.String("region", "", "size of the area region, WIDTHxHEIGHT pixels, or 0x0 for the whole frame")
 	transitions := fs.Int("transitions", -1, "most alternating transitions allowed in any one second")
 	format := fs.String("format", "text", "output format: text or json (a psv.report/v1 report)")
-	frames := fs.Bool("frames", false, "include every frame's result in JSON output")
+	frames := fs.Bool("frames", false, "include every frame's result in JSON output, as psv render needs")
 	progress := fs.Bool("progress", isTerminal(os.Stderr), "show progress on stderr")
 	ffmpeg := fs.String("ffmpeg", "", "path to ffmpeg (default: found on PATH)")
 	ffprobe := fs.String("ffprobe", "", "path to ffprobe (default: found on PATH)")
