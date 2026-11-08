@@ -101,7 +101,7 @@ Defects: 1
   1  2-598   0.03s-19.93s  X          X
 ```
 
-The video is one of the [example videos](testdata/examples): every frame is solid green, red or blue in turn, one colour per frame. A defect is a run of frames covered by failing flash sequences, from the first transition of a sequence to the frame that completes it.
+Output from the [v0.1.0 release](https://github.com/brian-nunez/psv/releases/tag/v0.1.0) binary. The video is one of the [example videos](testdata/examples): every frame is solid green, red or blue in turn, one colour per frame. A defect is a run of frames covered by failing flash sequences, from the first transition of a sequence to the frame that completes it.
 
 ### Flags
 
@@ -145,7 +145,7 @@ Threshold flags override single values of the chosen preset.
   "schema": "psv.report/v1",
   "tool": {
     "name": "psv",
-    "version": "9c1fefd"
+    "version": "v0.1.0"
   },
   "source": "video.mp4",
   "standard": "wcag22",
@@ -188,7 +188,7 @@ With `-frames`, `results` adds one entry per frame. Each entry has `luminance` a
 
 Failing frames also locate what flashes, wherever it is in the frame: `flashing` is the bounding box, in source pixels, of the flashing pixels that start a transition in that frame, and `mask` (base64) gives their share, 0 to 100, of each cell of a 64×36 grid over the frame, row by row from the top left. Unlike `region`, which is the fixed-size area the threshold is measured in, these follow the shape of the flashing.
 
-`tool.version` is the version of the build that made the report: `make build` stamps the `git describe` output (here the commit `9c1fefd`, as no release is tagged), and a plain `go build` reports `dev`. `standard` is the preset name, or `custom` when threshold flags change it. `psv render` and the report UI accept only `psv.report/v1` documents.
+`tool.version` is the version of the build that made the report: here the [v0.1.0 release](https://github.com/brian-nunez/psv/releases/tag/v0.1.0). Release binaries carry their tag; a local `make build` stamps `git describe`, and a plain `go build` reports `dev`. `standard` is the preset name, or `custom` when threshold flags change it. `psv render` and the report UI accept only `psv.report/v1` documents.
 
 ## Report UI
 
@@ -240,13 +240,13 @@ curl -sN --data-binary @testdata/examples/colors-epilepsy-warning/video.mp4 'htt
 ```text
 {"type":"received","bytes":45713}
 {"type":"progress","frame":1,"total":598}
-{"type":"progress","frame":8,"total":598}
+{"type":"progress","frame":7,"total":598}
 …
 {"type":"progress","frame":598,"total":598}
-{"type":"report","report":{"schema":"psv.report/v1","tool":{"name":"psv","version":"9c1fefd"},…
+{"type":"report","report":{"schema":"psv.report/v1","tool":{"name":"psv","version":"v0.1.0"},…
 ```
 
-That run sent 146 lines: `received` once the upload is stored, 144 `progress` events while frames are analysed, sent at most every 100 ms and for the last frame (without `total` when the container does not declare a frame count), and the `report`, shortened here; a failed analysis ends with `error` instead.
+That run sent 144 lines: `received` once the upload is stored, 142 `progress` events while frames are analysed, sent at most every 100 ms and for the last frame (without `total` when the container does not declare a frame count), and the `report`, shortened here; a failed analysis ends with `error` instead.
 
 The report has per-frame results, so it can be saved and passed to `psv render`. Problems found before the analysis starts are answered with an error status and a JSON `{"error": ...}` body: `400` for an unknown standard or an empty body, `413` past the upload limit, `422` for a file FFmpeg cannot read and `429` when `-max-jobs` analyses are already running. A failure after that ends the stream with a `{"type":"error","error":...}` event. Closing the connection cancels the analysis.
 
