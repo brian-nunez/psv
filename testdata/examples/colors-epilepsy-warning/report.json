@@ -2,7 +2,7 @@
   "schema": "psv.report/v1",
   "tool": {
     "name": "psv",
-    "version": "v1-poc"
+    "version": "v0.1.0"
   },
   "source": "video.mp4",
   "standard": "wcag22",
