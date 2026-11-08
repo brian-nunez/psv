@@ -54,7 +54,7 @@ jobs:
         run: make test-scripts
 
       - name: Build release binaries
-        run: make dist
+        run: make release
 
       - name: Check for uncommitted changes
         run: |

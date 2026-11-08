@@ -294,7 +294,7 @@ make serve                     # build and run the API server and report UI
 make examples                  # regenerate the example reports
 make lint                      # run golangci-lint
 make fmt                       # format and apply lint fixes
-make dist                      # build every release binary and SHA256SUMS into dist/
+make release                   # build every release binary and SHA256SUMS into dist/
 ```
 
 ### Releases

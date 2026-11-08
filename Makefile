@@ -2,7 +2,7 @@
 #
 #   make build                  bin/psv
 #   make test                   race detector on a subset, then every test
-#   make dist VERSION=v0.1.0    clean dist/, build every platform and write dist/SHA256SUMS
+#   make release VERSION=vX.Y.Z clean dist/, build every platform and write dist/SHA256SUMS
 #
 # Releases are made by GitHub Actions (.github/workflows/release.yml), not from a local machine.
 
@@ -17,7 +17,7 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 win
 # Real-world example videos and their reports, see testdata/examples.
 EXAMPLES := $(wildcard testdata/examples/*/video.mp4)
 
-.PHONY: all build install test test-scripts examples serve vet lint fmt fmt-check dist clean
+.PHONY: all build install test test-scripts examples serve vet lint fmt fmt-check release clean
 
 all: fmt-check lint build
 
@@ -60,8 +60,8 @@ fmt:
 fmt-check:
 	golangci-lint fmt --diff ./...
 
-# Release files: one binary per platform, named psv-<os>-<arch>, plus SHA256SUMS.
-dist:
+# Release files in dist/: one binary per platform, named psv-<os>-<arch>, plus SHA256SUMS.
+release:
 	rm -rf dist
 	@mkdir -p dist
 	@for p in $(PLATFORMS); do \

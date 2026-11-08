@@ -57,7 +57,7 @@ jobs:
         if: steps.version.outputs.version != ''
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: make dist VERSION="$VERSION"
+        run: make release VERSION="$VERSION"
 
       - name: Verify binaries
         if: steps.version.outputs.version != ''
