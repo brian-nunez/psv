@@ -22,7 +22,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -66,12 +66,12 @@ jobs:
         run: |
           (cd dist && shasum -a 256 -c SHA256SUMS)
 
-          # The runner can execute the darwin/arm64 binary; every binary is built with the same flags.
-          out=$(dist/psv-darwin-arm64 -version)
+          # The runner can execute the linux/amd64 binary; every binary is built with the same flags.
+          out=$(dist/psv-linux-amd64 -version)
           echo "$out"
 
           if [ "$out" != "psv $VERSION" ]; then
-            echo "::error::dist/psv-darwin-arm64 reports '$out', expected 'psv $VERSION'"
+            echo "::error::dist/psv-linux-amd64 reports '$out', expected 'psv $VERSION'"
             exit 1
           fi
 
