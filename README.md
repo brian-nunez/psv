@@ -137,10 +137,14 @@ Threshold flags override single values of the chosen preset.
 
 ## JSON report
 
-`-format json` prints the full report:
+`-format json` prints the full report in the `psv.report/v1` format:
 
 ```json
 {
+  "schema": "psv.report/v1",
+  "tool": { "name": "psv", "version": "v0.1.0" },
+  "source": "video.mp4",
+  "standard": "wcag22",
   "verdict": "Failed",
   "passed": false,
   "frameRate": 30,
@@ -176,6 +180,8 @@ Threshold flags override single values of the chosen preset.
 With `-frames`, `results` adds one entry per frame. Each entry has `luminance` and `red` measurements for the region that transitioned in that frame with the most alternating transitions: how many fall within the last second (`transitions`), the frame the sequence started (`since`), the region (`region`, in source pixels), the share of it that transitioned together (`area`, percent) and whether the frame completes a failing sequence (`failed`).
 
 Failing frames also locate what flashes, wherever it is in the frame: `flashing` is the bounding box, in source pixels, of the flashing pixels that start a transition in that frame, and `mask` (base64) gives their share, 0 to 100, of each cell of a 64×36 grid over the frame, row by row from the top left. Unlike `region`, which is the fixed-size area the threshold is measured in, these follow the shape of the flashing.
+
+`standard` is the preset name, or `custom` when threshold flags change it.
 
 ## Report prototype
 
@@ -233,9 +239,10 @@ PSV runs against the 346 videos of the [Trace RERC PSE test media](https://githu
 make test                                    # run every test
 go test -run TestConformance .               # the conformance suite alone
 go test -run 'TestConformance/wcag22/' .     # one standard
+go test -run TestExamples .                  # the real-world example videos
 ```
 
-The test media is vendored in `testdata/pse-test-media`, pinned to commit `ef78542`.
+The test media is vendored in `testdata/pse-test-media`, and real-world example videos with their reports are in [`testdata/examples`](testdata/examples).
 
 ## Documentation
 
@@ -247,6 +254,7 @@ The test media is vendored in `testdata/pse-test-media`, pinned to commit `ef785
 ```sh
 make all                       # format check, lint, build
 make test                      # run the race detector on a subset, then every test
+make examples                  # regenerate the example reports
 make lint                      # run golangci-lint
 make fmt                       # format and apply lint fixes
 ```

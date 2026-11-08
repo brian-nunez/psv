@@ -1,6 +1,9 @@
 package psv
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Verdict is the overall result of a video.
 type Verdict int
@@ -23,6 +26,20 @@ func (v Verdict) String() string {
 // MarshalText encodes the verdict by name.
 func (v Verdict) MarshalText() ([]byte, error) {
 	return []byte(v.String()), nil
+}
+
+// UnmarshalText decodes a verdict encoded by MarshalText.
+func (v *Verdict) UnmarshalText(b []byte) error {
+	switch string(b) {
+	case "Passed":
+		*v = Pass
+	case "Failed":
+		*v = Fail
+	default:
+		return fmt.Errorf("psv: unknown verdict %q", b)
+	}
+
+	return nil
 }
 
 // Passed reports whether the verdict is a pass.

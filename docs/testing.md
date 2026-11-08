@@ -3,11 +3,17 @@
 PSV is tested against the
 [Trace RERC PSE test media](https://github.com/traceRERC/pse-test-media), a
 benchmark of 346 videos built to sit just above or just below each threshold of
-each standard.
+each standard, and against real-world example videos.
 
-The benchmark is vendored in `testdata/pse-test-media` at commit `ef78542`,
-under its BSD 3-Clause license. Real-world example videos are in
-[`testdata/examples`](../testdata/examples/README.md).
+Both are in the repository:
+
+- `testdata/pse-test-media`: the benchmark at commit `ef78542`, under its BSD
+  3-Clause license.
+- `testdata/examples`: real-world videos with the `psv.report/v1` report of
+  their last accepted analysis. `TestExamples` decodes them with FFmpeg and
+  checks that the verdict, frame count, failures and defects still match, and
+  the CLI tests run them end to end. See its
+  [README](../testdata/examples/README.md).
 
 ## Running
 
@@ -18,8 +24,10 @@ make test
 This runs two passes:
 
 1. The race detector over a representative subset (`go test -race -short`):
-   luminance, red, area and synchronisation sets.
-2. Every test (`go test`).
+   luminance, red, area and synchronisation sets, plus the CLI tests on the
+   shortest example video.
+2. Every test (`go test`), including every example video. Tests that decode
+   video skip when `ffmpeg` is not on `PATH`.
 
 The conformance suite alone, without the race detector:
 
