@@ -6,7 +6,7 @@ LDFLAGS  := -s -w -X main.version=$(VERSION)
 # Real-world example videos and their reports, see testdata/examples.
 EXAMPLES := $(wildcard testdata/examples/*/video.mp4)
 
-.PHONY: all build install test examples vet lint fmt fmt-check clean prototype
+.PHONY: all build install test examples serve vet lint fmt fmt-check clean
 
 all: fmt-check lint build
 
@@ -29,6 +29,9 @@ examples: build
 		[ $$? -le 1 ] || exit 2; \
 	done
 
+serve: build
+	./bin/$(BINARY) serve
+
 vet:
 	go vet ./...
 
@@ -41,10 +44,6 @@ fmt:
 
 fmt-check:
 	golangci-lint fmt --diff ./...
-
-# PROTOTYPE: throwaway report UI, see prototype/reportui.
-prototype:
-	go run ./prototype/reportui
 
 clean:
 	rm -rf bin dist
