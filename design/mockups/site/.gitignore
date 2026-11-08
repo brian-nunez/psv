@@ -1,0 +1,3 @@
+# psv render output (up to 4 MB each) and capture scratch; regenerate with capture.sh
+reports/
+.tmp/
