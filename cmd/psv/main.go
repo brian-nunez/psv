@@ -1,9 +1,10 @@
 // Command psv is the Photosafety Validator command-line tool. It analyses a
-// video for flashing that can trigger photosensitive seizures and renders
-// psv.report/v1 reports in the report UI.
+// video for flashing that can trigger photosensitive seizures, renders
+// psv.report/v1 reports in the report UI and runs the PSV API server.
 //
 //	psv [analyze] [flags] <video>      analyse a video
 //	psv render [flags] [report.json]   write a report as a report UI page
+//	psv serve [flags]                  run the API server and report UI
 //
 // Analysis exits with status 0 when the video passes, 1 when it fails and 2
 // on error; the other commands exit with 0 or 2.
@@ -34,6 +35,7 @@ const (
 
 const usage = `usage: psv [analyze] [flags] <video>
        psv render [flags] [report.json | -]
+       psv serve [flags]
 `
 
 func main() {
@@ -47,6 +49,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return analyze(args[1:], stdout, stderr)
 		case "render":
 			return render(args[1:], stdin, stdout, stderr)
+		case "serve":
+			return serve(args[1:], stderr)
 		}
 	}
 

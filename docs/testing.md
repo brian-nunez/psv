@@ -12,7 +12,7 @@ Both are in the repository:
 - `testdata/examples`: real-world videos with the `psv.report/v1` report of
   their last accepted analysis. `TestExamples` decodes them with FFmpeg and
   checks that the verdict, frame count, failures and defects still match, and
-  the CLI tests run them end to end. See its
+  the CLI and API tests run them end to end. See its
   [README](../testdata/examples/README.md).
 
 ## Running
@@ -24,8 +24,8 @@ make test
 This runs two passes:
 
 1. The race detector over a representative subset (`go test -race -short`):
-   luminance, red, area and synchronisation sets, plus the CLI tests on the
-   shortest example video.
+   luminance, red, area and synchronisation sets, plus the CLI and API tests
+   on the shortest example video.
 2. Every test (`go test`), including every example video. Tests that decode
    video skip when `ffmpeg` is not on `PATH`.
 

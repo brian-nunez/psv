@@ -5,7 +5,7 @@
 <h1 align="center">Photosafety Validator</h1>
 
 <p align="center">
-  <b>Photosensitive epilepsy checker; a Go library and CLI that finds hazardous flashing in video against WCAG 2.2 and broadcast guidelines.</b>
+  <b>Photosensitive epilepsy checker; a Go library, CLI and API server that finds hazardous flashing in video against WCAG 2.2 and broadcast guidelines.</b>
 </p>
 
 <p align="center">
@@ -35,8 +35,8 @@
 <br>
 
 <p align="center">
-  <img src="docs/images/report.png" alt="PSV report prototype showing a failed verdict for a 20 second video, its length, frames, frame rate, size and standard, and a timeline of three flashing moments with transition and area charts against their limits" width="100%">
-  <br><sub><b>Report prototype</b>: the throwaway web UI in <code>prototype/reportui</code>, running a real analysis of a generated test clip.</sub>
+  <img src="docs/images/report.png" alt="PSV report UI showing a failed verdict for a 20 second video, its length, frames, frame rate, size and standard, and a timeline of three flashing moments with transition and area charts against their limits" width="100%">
+  <br><sub><b>Report UI</b>: the page <code>psv serve</code> shows and <code>psv render</code> writes, here for a generated test clip.</sub>
 </p>
 
 <p align="center">
@@ -63,7 +63,8 @@
 - **Benchmarked.** Tested against every video of the [Trace RERC PSE test media](https://github.com/traceRERC/pse-test-media), a benchmark built to sit just above or just below each threshold of each standard. See [Conformance](#conformance).
 - **Specific.** Failures name their frames, times and screen regions, and per-frame JSON locates the flashing pixels wherever they are in the frame.
 - **Pipeline-ready.** The exit status is `0` when the video passes, `1` when it fails and `2` on an error, so `psv` can gate a build or upload pipeline.
-- **Embeddable.** The repository is a Go module with one core package, `psv`, and thin apps on top of it. The command-line tool lives in `cmd/psv`; web, API and other frontends call the same package, and apps with their own decoded frames can stream them straight to an `Analyzer`.
+- **One report everywhere.** The CLI and the API both produce the same `psv.report/v1` JSON, and `psv render` shows it in the same report UI the API server serves.
+- **Embeddable.** The repository is a Go module with one core package, `psv`, and thin apps on top of it: the CLI, API server and report UI live in `cmd/psv` and `internal`. Apps with their own decoded frames can stream them straight to an `Analyzer`.
 
 ## Quick start
 
@@ -137,7 +138,7 @@ Threshold flags override single values of the chosen preset.
 
 ## JSON report
 
-`-format json` prints the full report in the `psv.report/v1` format:
+`-format json` prints the full report in the `psv.report/v1` format, which the API returns too:
 
 ```json
 {
@@ -196,9 +197,31 @@ psv -format json -frames video.mp4 | psv render -o report.html
 
 The page needs the per-frame results that `-frames` adds. To see the frames themselves, attach the video in the page; it stays in the browser.
 
-## Report prototype
+## API server
 
-`make prototype` starts a throwaway web UI at `http://127.0.0.1:8099` for judging report designs against real analyses. It is not production code and does not ship.
+`psv serve` runs the API and serves the report UI at `http://127.0.0.1:8080`. The server stores nothing: a client streams a video in, the response streams the analysis back, and the upload is deleted when the request ends.
+
+```sh
+psv serve -addr 127.0.0.1:8080 -max-upload 2048 -max-jobs 2 -timeout 30m
+```
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /v1/analyses?standard=wcag22&name=clip.mp4` | The video is the request body; the response is newline-delimited JSON events |
+| `GET /healthz` | `{"status":"ok"}` |
+| `GET /` | The report UI |
+
+```sh
+curl -sN --data-binary @clip.mp4 'http://127.0.0.1:8080/v1/analyses?name=clip.mp4'
+```
+
+```text
+{"type":"received","bytes":45713}
+{"type":"progress","frame":120,"total":598}
+{"type":"report","report":{"schema":"psv.report/v1", ...}}
+```
+
+The report has per-frame results, so it can be saved and passed to `psv render`. Problems found before the analysis starts are answered with an error status and a JSON `{"error": ...}` body: `400` for an unknown standard or an empty body, `413` past the upload limit, `422` for a file FFmpeg cannot read and `429` when `-max-jobs` analyses are already running. A failure after that ends the stream with a `{"type":"error","error":...}` event. Closing the connection cancels the analysis.
 
 <table>
 <tr>
@@ -267,6 +290,7 @@ The test media is vendored in `testdata/pse-test-media`, and real-world example 
 ```sh
 make all                       # format check, lint, build
 make test                      # run the race detector on a subset, then every test
+make serve                     # build and run the API server and report UI
 make examples                  # regenerate the example reports
 make lint                      # run golangci-lint
 make fmt                       # format and apply lint fixes

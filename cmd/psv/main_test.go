@@ -170,3 +170,9 @@ func TestRenderRejects(t *testing.T) {
 		})
 	}
 }
+
+func TestServeRejectsArguments(t *testing.T) {
+	if code, _, stderr := runPSV(t, nil, "serve", "extra"); code != exitError || !strings.Contains(stderr, "usage") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+}
