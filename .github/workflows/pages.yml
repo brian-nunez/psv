@@ -1,0 +1,59 @@
+name: Pages
+
+# Publishes the project site: site/index.html plus a psv render page of every committed example
+# report in testdata/examples. Nothing is analysed and no video is published; the report pages are
+# rendered from the committed report.json files.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - testdata/examples/*/report.json
+      - internal/ui/**
+      - cmd/psv/**
+      - Makefile
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/configure-pages@v6
+
+      - name: Build site
+        run: make site
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy site
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

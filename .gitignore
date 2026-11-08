@@ -19,6 +19,7 @@ Thumbs.db
 # Go build and test output
 /bin/
 /dist/
+/_site/
 *.test
 *.out
 coverage.*
