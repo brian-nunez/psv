@@ -1,7 +1,8 @@
 # psv build. Requires Go and, to analyse video or run every test, FFmpeg.
 #
 #   make build                  bin/psv
-#   make test                   race detector on a subset, then every test
+#   make test                   race detector on a subset, then every test (CI runs this)
+#   make test-examples          the full-resolution example videos (CI runs these on demand)
 #   make release VERSION=vX.Y.Z clean dist/, build every platform and write dist/SHA256SUMS
 #
 # Releases are made by GitHub Actions (.github/workflows/release.yml), not from a local machine.
@@ -17,7 +18,7 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 win
 # Real-world example videos and their reports, see testdata/examples.
 EXAMPLES := $(wildcard testdata/examples/*/video.mp4)
 
-.PHONY: all build install test test-scripts examples serve vet lint fmt fmt-check release clean
+.PHONY: all build install test test-examples test-scripts examples clips serve vet lint fmt fmt-check release clean
 
 all: fmt-check lint build
 
@@ -31,6 +32,12 @@ test:
 	go test -race -short ./...
 	go test -timeout 30m ./...
 
+# The full-resolution example videos in testdata/examples, checked against their reports.
+# EXAMPLE=<folder> runs one of them.
+test-examples:
+	PSV_TEST_EXAMPLES=1 go test -count=1 -timeout 30m -v \
+		-run '^TestExamples$$$(if $(EXAMPLE),/^$(EXAMPLE)$$)' .
+
 # Tests for the release scripts in scripts/.
 test-scripts:
 	bash scripts/next-version_test.sh
@@ -43,6 +50,18 @@ examples: build
 		(cd $$d && ../../../bin/$(BINARY) -progress=false -format json -frames video.mp4 > report.json); \
 		[ $$? -le 1 ] || exit 2; \
 	done
+
+# The small clips the CLI and API tests decode, see testdata/clips: 320x180 at 30 fps. pass.mp4 is
+# 3 seconds of still colour bars and long.mp4 60 seconds of them; fail.mp4 flashes the whole frame
+# white, then red, on black, five times a second for 3 seconds.
+clips:
+	ffmpeg -v error -y -f lavfi -i "smptebars=s=320x180:r=30:d=3" \
+		-pix_fmt yuv420p -c:v libx264 -crf 23 -g 30 testdata/clips/pass.mp4
+	ffmpeg -v error -y -f lavfi -i "smptebars=s=320x180:r=30:d=60" \
+		-pix_fmt yuv420p -c:v libx264 -crf 23 -g 30 testdata/clips/long.mp4
+	ffmpeg -v error -y -f lavfi -i "color=c=black:s=320x180:r=30:d=3" \
+		-vf "drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='lt(n,45)*lt(mod(n,6),3)',drawbox=x=0:y=0:w=iw:h=ih:color=red:t=fill:enable='gte(n,45)*lt(mod(n,6),3)'" \
+		-pix_fmt yuv420p -c:v libx264 -crf 23 -g 30 testdata/clips/fail.mp4
 
 serve: build
 	./bin/$(BINARY) serve

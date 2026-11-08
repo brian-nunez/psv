@@ -5,15 +5,16 @@ PSV is tested against the
 benchmark of 346 videos built to sit just above or just below each threshold of
 each standard, and against real-world example videos.
 
-Both are in the repository:
+All of it is in the repository:
 
 - `testdata/pse-test-media`: the benchmark at commit `ef78542`, under its BSD
   3-Clause license.
-- `testdata/examples`: real-world videos with the `psv.report/v1` report of
-  their last accepted analysis. `TestExamples` decodes them with FFmpeg and
-  checks that the verdict, frame count, failures and defects still match, and
-  the CLI and API tests run them end to end. See its
-  [README](../testdata/examples/README.md).
+- `testdata/examples`: full-resolution real-world videos with the
+  `psv.report/v1` report of their last accepted analysis. `TestExamples`
+  decodes them with FFmpeg and checks that the verdict, frame count, failures
+  and defects still match. See its [README](../testdata/examples/README.md).
+- `testdata/clips`: three small generated clips (320×180) the CLI and API tests
+  decode end to end. See its [README](../testdata/clips/README.md).
 
 ## Running
 
@@ -21,13 +22,25 @@ Both are in the repository:
 make test
 ```
 
-This runs two passes:
+This runs two passes, and is what CI runs on every pull request and push to
+`main`:
 
-1. The race detector over a representative subset (`go test -race -short`):
-   luminance, red, area and synchronisation sets, plus the CLI and API tests
-   on the shortest example video.
-2. Every test (`go test`), including every example video. Tests that decode
-   video skip when `ffmpeg` is not on `PATH`.
+1. The race detector over a small subset (`go test -race -short`): the first
+   failing video of the luminance, red, area and synchronisation sets, plus the
+   CLI and API tests on the clips.
+2. Every test (`go test`): the whole conformance suite and the CLI and API tests.
+   Tests that decode video skip when `ffmpeg` is not on `PATH`.
+
+The full-resolution example videos are slow to decode, so they run on demand:
+
+```bash
+make test-examples                                   # every example video
+make test-examples EXAMPLE=colors-epilepsy-warning   # one of them
+```
+
+In CI, the [Examples workflow](../.github/workflows/examples.yml) runs them
+when started by hand (Actions, Examples, Run workflow), with one job per
+example folder.
 
 The conformance suite alone, without the race detector:
 

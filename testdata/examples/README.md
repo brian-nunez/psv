@@ -3,7 +3,10 @@
 Real-world videos with the `psv.report/v1` report of their last accepted
 analysis (WCAG 2.2, with per-frame results). `TestExamples` decodes every video
 with FFmpeg and checks that the verdict, frame count, failures and defects still
-match the report; the API and CLI tests use them too.
+match the report. Full-resolution decoding is slow, so it runs on demand:
+`make test-examples` locally, or the
+[Examples workflow](../../.github/workflows/examples.yml) in CI, one job per
+folder. A new folder here gets its own job automatically.
 
 > [!WARNING]
 > Most of these videos contain flashing that may trigger seizures in people

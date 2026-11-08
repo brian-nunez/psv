@@ -22,8 +22,9 @@ import (
 // declares the standards it targets in its README and lists every video's
 // result for them in its listing CSV, whose dimension column names the
 // threshold a passing video stays under, or the failure (FAIL, fail_red,
-// fail_luminance, fail_both). With -short only shortSets run. Fetch the
-// media with `make testdata`.
+// fail_luminance, fail_both). With -short, which make test runs under the race
+// detector, only the first failing video of each of shortSets runs. The media
+// is vendored in testdata/pse-test-media.
 
 const mediaDir = "testdata/pse-test-media"
 
@@ -74,11 +75,25 @@ const (
 		"at frames 4, 5, 11, 12, 21, 22 and 31 of the pattern, seven transitions within one second"
 )
 
-// shortSets cover luminance, red, area and synchronisation with -short.
+// shortSets cover luminance, red, area and synchronisation with -short. A
+// failing video exercises every concurrent stage of the detector, so one per
+// set is enough for the race detector; the full run checks every video.
 var shortSets = map[string]bool{
 	"30fps_alternating_01": true,
 	"wcagc_30fps_area03":   true,
 	"trace24_30fps_sync01": true,
+}
+
+// firstFailing returns the first video of a set's listing that is listed as
+// failing and has no upstream listing error.
+func firstFailing(listing []listedVideo, set string) []listedVideo {
+	for _, v := range listing {
+		if _, bad := upstreamErrors[set+"/"+v.name]; !v.pass && !bad {
+			return []listedVideo{v}
+		}
+	}
+
+	return nil
 }
 
 type videoSpec struct {
@@ -97,7 +112,7 @@ func TestConformance(t *testing.T) {
 	}
 
 	if len(sets) == 0 {
-		t.Skipf("benchmark media not found in %s; run `make testdata`", mediaDir)
+		t.Skipf("benchmark media not found in %s", mediaDir)
 	}
 
 	masks := &maskCache{masks: map[string]*mask{}}
@@ -112,6 +127,10 @@ func TestConformance(t *testing.T) {
 
 		targets := setStandards(t, readme)
 		listing := readListing(t, filepath.Join(dir, set+".csv"))
+
+		if testing.Short() {
+			listing = firstFailing(listing, set)
+		}
 
 		for _, std := range targets {
 			preset := standards[std]
