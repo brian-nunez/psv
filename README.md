@@ -294,7 +294,22 @@ make serve                     # build and run the API server and report UI
 make examples                  # regenerate the example reports
 make lint                      # run golangci-lint
 make fmt                       # format and apply lint fixes
+make dist                      # build every release binary and SHA256SUMS into dist/
 ```
+
+### Releases
+
+Releases are made by GitHub Actions, not from a local machine. The [CI workflow](.github/workflows/ci.yml) checks formatting, lint, vet and every test on each pull request and push to `main`. When CI passes on `main`, the [Release workflow](.github/workflows/release.yml) works out the next version from the [Conventional Commits](https://www.conventionalcommits.org/) since the last tag with [`scripts/next-version.sh`](scripts/next-version.sh), builds `psv` for Linux, macOS and Windows on amd64 and arm64, and publishes them with `SHA256SUMS` as a GitHub release.
+
+| Commits since the last tag | Next version |
+| --- | --- |
+| None tagged yet | `v0.1.0` |
+| A breaking change (`type!:` or a `BREAKING CHANGE:` footer) | Next major |
+| `feat` | Next minor |
+| `fix`, `perf`, `refactor`, `build`, `revert` or any other subject | Next patch |
+| Only `docs`, `ci`, `chore`, `test` or `style` | No release |
+
+`psv -version` prints the release's tag. A local `make build` stamps `git describe`, so between releases it shows the last tag, the commits since it and the commit.
 
 ## License
 
