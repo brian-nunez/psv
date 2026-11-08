@@ -1,8 +1,9 @@
 name: Pages
 
-# Publishes the project site: site/index.html plus a psv render page of every committed example
-# report in testdata/examples. Nothing is analysed and no video is published; the report pages are
-# rendered from the committed report.json files.
+# Publishes the project site to https://psv.b8z.me: site/index.html plus a psv render page of every
+# committed example report in testdata/examples. Nothing is analysed and no video is published; the
+# report pages are rendered from the committed report.json files. The custom domain is set in the
+# repository's Pages settings, which Actions deployments use instead of a CNAME file.
 on:
   push:
     branches: [main]
