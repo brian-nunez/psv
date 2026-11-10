@@ -25,16 +25,48 @@ type Config struct {
 	// Thresholds are the detection parameters; the zero value selects
 	// DefaultThresholds.
 	Thresholds Thresholds
+	// WatchMethod selects how Watch measures Update.Building; the zero value
+	// selects WatchPixel.
+	WatchMethod string
 }
 
 // Analyzer analyses a stream of frames. Whether a frame belongs to a
 // hazardous sequence depends on the second of video after it, so each frame
-// is decided one second after it is analysed. It is not safe for concurrent
-// use.
+// is decided one second after it is analysed. Analyze keeps every decided
+// frame for a report; Watch hands each one to the caller as soon as it can,
+// for live streams. It is not safe for concurrent use.
 type Analyzer struct {
 	detect   *detector
 	analysis Analysis
 	finished bool
+	mode     mode
+	method   string
+	// watched and decided count the frames Watch has seen and decided.
+	watched, decided int
+}
+
+// mode is the way an Analyzer is being used.
+type mode uint8
+
+const (
+	modeNone mode = iota
+	modeAnalyze
+	modeWatch
+)
+
+// use fixes the Analyzer to one mode on first use.
+func (a *Analyzer) use(m mode) error {
+	if a.finished {
+		return ErrFinished
+	}
+
+	if a.mode != modeNone && a.mode != m {
+		return ErrMode
+	}
+
+	a.mode = m
+
+	return nil
 }
 
 // NewAnalyzer starts the analysis of a video with the given frame rate and
@@ -59,10 +91,20 @@ func NewAnalyzer(fps float64, width, height int, cfg Config) (*Analyzer, error) 
 		return nil, fmt.Errorf("%w: %+v", ErrThresholds, th)
 	}
 
+	method := cfg.WatchMethod
+	if method == "" {
+		method = WatchPixel
+	}
+
+	if method != WatchPixel {
+		return nil, fmt.Errorf("%w: %q", ErrWatchMethod, method)
+	}
+
 	s := newSampler(width, height, th.RedSaturation)
 
 	return &Analyzer{
 		detect: newDetector(rate, s, th),
+		method: method,
 		analysis: Analysis{
 			FrameRate:  rate,
 			Width:      width,
@@ -79,8 +121,8 @@ var ErrFinished = errors.New("psv: analysis is finished")
 // was created with. The frames it decides are appended to Analysis().Frames;
 // it returns how many.
 func (a *Analyzer) Analyze(f *Frame) (int, error) {
-	if a.finished {
-		return 0, ErrFinished
+	if err := a.use(modeAnalyze); err != nil {
+		return 0, err
 	}
 
 	if err := f.validate(a.analysis.Width, a.analysis.Height); err != nil {
@@ -94,10 +136,15 @@ func (a *Analyzer) Analyze(f *Frame) (int, error) {
 }
 
 // Finish decides the remaining frames and returns the complete analysis.
+// After Watch, it returns the analysis without frames and drops the frames
+// still waiting; Stop returns them.
 func (a *Analyzer) Finish() *Analysis {
 	if !a.finished {
 		a.finished = true
-		a.analysis.Frames = append(a.analysis.Frames, a.detect.flush()...)
+
+		if a.mode != modeWatch {
+			a.analysis.Frames = append(a.analysis.Frames, a.detect.flush()...)
+		}
 	}
 
 	return &a.analysis

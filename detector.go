@@ -27,7 +27,11 @@ import (
 // fails; under WCAG 2.2 that is seven transitions, more than three flashes.
 //
 // Whether a pixel flashes depends on its transitions up to a second after
-// the frame, so a frame is decided one second after it is seen.
+// the frame, so a frame is decided one second after it is seen. Only the
+// absence of flashing needs that second: once a pixel has made more than
+// Thresholds.MaxTransitions transitions within the second ending at a frame,
+// later frames cannot undo it. A live detector (Analyzer.Watch) reports that,
+// and how far every transitioning pixel is from it, in the frame it happens.
 
 // detector runs flash detection over a sequence of frames.
 type detector struct {
@@ -48,11 +52,59 @@ type detector struct {
 	// bands split each frame into row ranges processed in parallel, with the
 	// transitions each band found.
 	bands []band
+
+	// live makes process measure the activity of each frame (Building).
+	live     bool
+	building Building
+
+	// Frame numbers are stored as int32. Once frame reaches rebaseAt, every
+	// stored frame number moves back by a multiple of rate, and base keeps
+	// the frames removed, so that a detector can run indefinitely.
+	base, rebaseAt int
 }
+
+// defaultRebaseAt leaves a margin below math.MaxInt32 for the frames stored
+// ahead of the current one.
+const defaultRebaseAt = 1 << 30
 
 type band struct {
 	y0, y1    int
 	luma, red []event
+	// lumaAct and redAct are the band's share of the frame's activity, when
+	// live.
+	lumaAct, redAct activity
+}
+
+// activity accumulates the live measurement of one kind of flash in one
+// frame, in picture pixels.
+type activity struct {
+	peak, moved, flashing int
+	box                   image.Rectangle
+	// cells holds, per Flashes.Mask cell, the highest count of transitions
+	// within the last second of any pixel in it that transitions.
+	cells [MaskColumns * MaskRows]uint8
+}
+
+func (a *activity) reset() {
+	if a.moved > 0 {
+		*a = activity{}
+	}
+}
+
+// add merges another band's activity into a.
+func (a *activity) add(b *activity) {
+	if b.moved == 0 {
+		return
+	}
+
+	a.peak = max(a.peak, b.peak)
+	a.moved += b.moved
+	a.flashing += b.flashing
+	a.box = a.box.Union(b.box)
+
+	for i, n := range b.cells {
+		a.cells[i] = max(a.cells[i], n)
+	}
 }
 
 // event is a pixel starting an alternating transition.
@@ -81,17 +133,18 @@ func newDetector(rate int, s *sampler, th Thresholds) *detector {
 	}
 
 	return &detector{
-		th:     th,
-		rate:   rate,
-		width:  width,
-		height: height,
-		factor: factor,
-		sample: s,
-		cur:    newPicture(width * height),
-		prev:   newPicture(width * height),
-		luma:   newChannel(width, height, rw, rh, rate, th.MaxTransitions),
-		red:    newChannel(width, height, rw, rh, rate, th.MaxTransitions),
-		bands:  bands,
+		th:       th,
+		rate:     rate,
+		width:    width,
+		height:   height,
+		factor:   factor,
+		sample:   s,
+		cur:      newPicture(width * height),
+		prev:     newPicture(width * height),
+		luma:     newChannel(width, height, rw, rh, rate, th.MaxTransitions),
+		red:      newChannel(width, height, rw, rh, rate, th.MaxTransitions),
+		bands:    bands,
+		rebaseAt: defaultRebaseAt,
 	}
 }
 
@@ -102,6 +155,10 @@ func (d *detector) delay() int {
 
 // process takes frame f and returns the results of the frames it decides.
 func (d *detector) process(f *Frame) []FrameResult {
+	if d.frame >= d.rebaseAt {
+		d.rebase()
+	}
+
 	t := d.frame
 	d.frame++
 
@@ -118,10 +175,19 @@ func (d *detector) process(f *Frame) []FrameResult {
 			if t > 0 {
 				d.steps(b, t)
 			}
+
+			if d.live {
+				d.luma.measure(b.luma, &b.lumaAct)
+				d.red.measure(b.red, &b.redAct)
+			}
 		}(&d.bands[b])
 	}
 
 	wg.Wait()
+
+	if d.live {
+		d.measure()
+	}
 
 	d.cur, d.prev = d.prev, d.cur
 
@@ -167,6 +233,56 @@ func (d *detector) decide(f, now int) FrameResult {
 	return res
 }
 
+// rebase moves every stored frame number back by a multiple of the rate,
+// keeping the last two seconds representable and the queue slots in place.
+func (d *detector) rebase() {
+	shift := (d.frame - 2*d.rate) / d.rate * d.rate
+	if shift <= 0 {
+		return
+	}
+
+	d.luma.rebase(shift)
+	d.red.rebase(shift)
+	d.frame -= shift
+	d.base += shift
+}
+
+// measure merges the bands' activity into d.building.
+func (d *detector) measure() {
+	var luma, red activity
+
+	for b := range d.bands {
+		luma.add(&d.bands[b].lumaAct)
+		red.add(&d.bands[b].redAct)
+	}
+
+	d.building = Building{
+		Luminance: d.activity(&luma),
+		Red:       d.activity(&red),
+	}
+}
+
+// activity converts an accumulated measurement to source pixels and
+// percentages of the frame.
+func (d *detector) activity(a *activity) Activity {
+	if a.moved == 0 {
+		return Activity{}
+	}
+
+	total := float64(d.width * d.height)
+	box := a.box
+	box.Min = box.Min.Mul(d.factor)
+	box.Max = box.Max.Mul(d.factor)
+
+	return Activity{
+		Peak:     a.peak,
+		Flashing: float64(a.flashing) * 100 / total,
+		Area:     float64(a.moved) * 100 / total,
+		Bounds:   box,
+		Mask:     append([]byte(nil), a.cells[:]...),
+	}
+}
+
 // steps advances the transition state of the pixels of one band in frame t.
 func (d *detector) steps(b *band, t int) {
 	b.luma, b.red = b.luma[:0], b.red[:0]
@@ -188,7 +304,7 @@ func (d *detector) finish(f *Flashes) {
 	f.Failed = f.Transitions > d.th.MaxTransitions
 
 	if f.Transitions > 0 {
-		f.Since++
+		f.Since += 1 + d.base
 	}
 
 	f.Region.Min = f.Region.Min.Mul(d.factor)
@@ -363,6 +479,63 @@ func (c *channel) step(i, t int, dir int8) bool {
 	h[0] |= 1
 
 	return true
+}
+
+// recent returns how many transitions pixel i made within the second ending
+// at the frame of its last one: the frame being processed, for a pixel that
+// starts a transition in it.
+func (c *channel) recent(i int) int {
+	h := c.hist[i*c.words : (i+1)*c.words]
+	n := 0
+
+	for w, left := 0, c.rate; left > 0; w, left = w+1, left-64 {
+		v := h[w]
+		if left < 64 {
+			v &= 1<<left - 1
+		}
+
+		n += bits.OnesCount64(v)
+	}
+
+	return n
+}
+
+// measure accumulates into a the live activity of the pixels that start a
+// transition in the frame being processed.
+func (c *channel) measure(events []event, a *activity) {
+	a.reset()
+
+	for _, e := range events {
+		i := int(e.pixel)
+		x, y := i%c.width, i/c.width
+		n := c.recent(i)
+
+		a.moved++
+		a.peak = max(a.peak, n)
+
+		if cell := c.cell(x, y); uint8(n) > a.cells[cell] {
+			a.cells[cell] = uint8(n)
+		}
+
+		if n > c.maxTransitions {
+			a.flashing++
+			a.box = a.box.Union(image.Rect(x, y, x+1, y+1))
+		}
+	}
+}
+
+// rebase moves the stored frame numbers shift frames back. Numbers that fall
+// below the int32 range are long out of every window and clamp to its
+// minimum.
+func (c *channel) rebase(shift int) {
+	move := func(v []int32) {
+		for i, f := range v {
+			v[i] = int32(max(int(f)-shift, math.MinInt32))
+		}
+	}
+
+	move(c.updated)
+	move(c.times)
 }
 
 // age moves a history n frames into the past, dropping what falls out of it.

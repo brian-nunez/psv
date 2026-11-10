@@ -8,10 +8,12 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/brian-nunez/psv"
 )
@@ -25,6 +27,11 @@ import (
 // fail_luminance, fail_both). With -short, which make test runs under the race
 // detector, only the first failing video of each of shortSets runs. The media
 // is vendored in testdata/pse-test-media.
+//
+// Every video also runs live, through Analyzer.Watch in lockstep with
+// Analyze: its decided frames must be identical, and a failing video must
+// show flashing pixels live no later than the frame that completes its
+// first failing sequence, a second before that failure is decided.
 
 const mediaDir = "testdata/pse-test-media"
 
@@ -116,6 +123,9 @@ func TestConformance(t *testing.T) {
 	}
 
 	masks := &maskCache{masks: map[string]*mask{}}
+	live := &liveStats{}
+
+	t.Cleanup(func() { live.log(t) })
 
 	for _, readme := range sets {
 		dir := filepath.Dir(readme)
@@ -146,11 +156,13 @@ func TestConformance(t *testing.T) {
 					}
 
 					spec := readSpec(t, filepath.Join(dir, video.name+".json"))
-					analysis := analyze(t, dir, spec, preset.th(), masks)
+					analysis, l := analyze(t, dir, spec, preset.th(), masks)
 
 					if got := analysis.Verdict().Passed(); got != video.pass {
 						t.Errorf("verdict %s, want %s (%s)", analysis.Verdict(), verdictName(video.pass), peak(analysis))
 					}
+
+					live.add(analysis, l, liveLead(t, analysis, l))
 				})
 			}
 		}
@@ -273,7 +285,7 @@ type layer struct {
 
 type rgba struct{ r, g, b, a uint8 }
 
-func analyze(t *testing.T, dir string, spec videoSpec, th psv.Thresholds, masks *maskCache) *psv.Analysis {
+func analyze(t *testing.T, dir string, spec videoSpec, th psv.Thresholds, masks *maskCache) (*psv.Analysis, *lockstep) {
 	t.Helper()
 
 	bg := parseColor(t, spec.BGColor)
@@ -290,22 +302,64 @@ func analyze(t *testing.T, dir string, spec videoSpec, th psv.Thresholds, masks 
 
 	w, h := layers[0].mask.width, layers[0].mask.height
 
-	a, err := psv.NewAnalyzer(spec.FrameRate, w, h, psv.Config{Thresholds: th})
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	l := newLockstep(t, spec.FrameRate, w, h, psv.Config{Thresholds: th})
 	frame := &psv.Frame{Width: w, Height: h, Pix: make([]byte, w*h*3)}
 
 	for n := -padding; n < frames; n++ {
 		render(frame, layers, max(n, 0), bg)
-
-		if _, err := a.Analyze(frame); err != nil {
-			t.Fatal(err)
-		}
+		l.add(t, frame)
 	}
 
-	return a.Finish()
+	return l.finish(t), l
+}
+
+// liveStats summarises the live measurement over the conformance suite.
+type liveStats struct {
+	mu sync.Mutex
+	// failing and passing count videos; early counts the passing videos
+	// that still showed flashing pixels live.
+	failing, passing, early int
+	leads                   []int
+	spent                   time.Duration
+	frames                  int
+}
+
+func (s *liveStats) add(a *psv.Analysis, l *lockstep, leads []int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.spent += l.spent
+	s.frames += l.frames
+
+	if !a.Verdict().Passed() {
+		s.failing++
+		s.leads = append(s.leads, leads...)
+
+		return
+	}
+
+	s.passing++
+
+	if l.live != [2]int{} {
+		s.early++
+	}
+}
+
+func (s *liveStats) log(t *testing.T) {
+	if s.frames == 0 {
+		return
+	}
+
+	slices.Sort(s.leads)
+
+	lead := "none"
+	if n := len(s.leads); n > 0 {
+		lead = fmt.Sprintf("min %d, median %d, max %d", s.leads[0], s.leads[n/2], s.leads[n-1])
+	}
+
+	t.Logf("live: %d failing videos seen live before their failure was decided, by frames %s; "+
+		"%d of %d passing videos show flashing pixels live; Watch %v a frame",
+		s.failing, lead, s.early, s.passing, s.spent/time.Duration(s.frames))
 }
 
 // render composes frame n: the background, then every layer that has a
