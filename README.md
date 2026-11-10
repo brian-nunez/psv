@@ -304,6 +304,100 @@ for frame := range frames { // *psv.Frame: packed 8-bit sRGB, top row first
 verdict := a.Finish().Verdict()
 ```
 
+### Live streams
+
+Apps that protect a viewer while video plays, such as a screen guard, use `Analyzer.Watch` instead of `Analyze`. It keeps no history, so memory stays flat for sessions of any length, and each call returns a `psv.watch/v1` `Update`:
+
+- `Building`: what is known about the frame as it is seen, per kind of flash. `Peak` is the most transitions in the last second of any pixel that transitions in this frame; `Flashing` is the share of the frame already flashing (more than 6 transitions under WCAG 2.2), with its bounding box in `Bounds`; `Mask` holds the peak of each cell of the 64×36 grid. It is provisional and pixel-level: it also sees flashing too small to fail.
+- `Decided`: the final results of the frames decided by this one, about a second behind and identical to what `Analyze` would append.
+
+| Information | Available |
+| --- | --- |
+| Transitions per pixel in the last second, and where (`Peak`, `Mask`, `Area`) | in the frame they happen |
+| Pixels that flash (`Flashing`, `Bounds`), never withdrawn later | in the frame of their seventh transition |
+| Whether a frame fails, with regions and defects (`Decided`) | one second later |
+
+This program watches raw frames on stdin, here a 60 fps capture of a screen on macOS (`ffmpeg -f avfoundation -list_devices true -i ""` lists the screen device numbers):
+
+```bash
+go get github.com/brian-nunez/psv
+ffmpeg -v error -f avfoundation -capture_cursor 1 -framerate 60 -i 1 \
+  -vf scale=640:360 -pix_fmt rgb24 -f rawvideo - | go run . -w 640 -h 360 -fps 60
+```
+
+```go
+package main
+
+import (
+	"bufio"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"os"
+
+	"github.com/brian-nunez/psv"
+)
+
+func main() {
+	w := flag.Int("w", 640, "frame width")
+	h := flag.Int("h", 360, "frame height")
+	fps := flag.Float64("fps", 60, "frame rate")
+	flag.Parse()
+
+	a, err := psv.NewAnalyzer(*fps, *w, *h, psv.Config{Thresholds: psv.WCAG22()})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	in := bufio.NewReaderSize(os.Stdin, 1<<20)
+	f := &psv.Frame{Width: *w, Height: *h, Pix: make([]byte, *w**h*3)}
+
+	for {
+		if _, err := io.ReadFull(in, f.Pix); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			log.Fatal(err)
+		}
+
+		u, err := a.Watch(f)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Now, in this frame: grid cells whose pixels made 5 or more
+		// transitions in the last second. Above 6, they flash.
+		for _, act := range []psv.Activity{u.Building.Luminance, u.Building.Red} {
+			cells := 0
+
+			for _, peak := range act.Mask {
+				if peak >= 5 {
+					cells++ // cover cell (i%psv.MaskColumns, i/psv.MaskColumns)
+				}
+			}
+
+			if cells > 0 {
+				fmt.Printf("frame %d: %d cells building, peak %d, flashing in %v\n", u.Frame, cells, act.Peak, act.Bounds)
+			}
+		}
+
+		// About a second later: the final result of each decided frame.
+		for i, r := range u.Decided {
+			if r.Failed() {
+				fmt.Printf("frame %d: failing flash sequence\n", u.DecidedFrom+i)
+			}
+		}
+	}
+
+	if _, err := a.Stop(); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+`Analyzer.Stop` returns the frames still waiting to be decided when the stream ends.
+
 ## Conformance
 
 PSV runs against the 346 videos of the [Trace RERC PSE test media](https://github.com/traceRERC/pse-test-media). A set built for several standards runs once per preset, which makes 378 checks: 369 pass, 0 fail and 9 are skipped because their listing entries contradict the thresholds they test. Each skip is explained in the [testing guide](docs/testing.md#upstream-errors).

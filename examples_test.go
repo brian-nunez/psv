@@ -2,6 +2,8 @@ package psv_test
 
 import (
 	"context"
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +17,8 @@ import (
 // examplesDir holds real-world videos, each with the psv.report/v1 report of
 // its last accepted analysis. TestExamples decodes them with FFmpeg and checks
 // the analysis still matches; `make examples` regenerates the reports after
-// an intended change in results.
+// an intended change in results. Each video is also watched live, through
+// Analyzer.Watch, and must give the same report.
 //
 // Decoding full-resolution footage is slow, so TestExamples runs only when
 // PSV_TEST_EXAMPLES is set: `make test-examples` locally, or the Examples
@@ -62,25 +65,97 @@ func TestExamples(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got := analysis.Report(false)
+			compareReport(t, "Analyze", analysis.Report(false), want)
 
-			for _, c := range []struct {
-				name      string
-				got, want any
-			}{
-				{"verdict", got.Verdict, want.Verdict},
-				{"frame rate", got.FrameRate, want.FrameRate},
-				{"frames", got.Frames, want.Frames},
-				{"size", [2]int{got.Width, got.Height}, [2]int{want.Width, want.Height}},
-				{"failures", got.Failures, want.Failures},
-				{"defects", got.Defects, want.Defects},
-			} {
-				if !reflect.DeepEqual(c.got, c.want) {
-					t.Errorf("%s: got %+v, want %+v", c.name, c.got, c.want)
-				}
-			}
+			watched, leads := watchFile(t, video, th)
+			compareReport(t, "Watch", watched.Report(false), want)
+			t.Logf("live ahead of the decided failure by %v frames", leads)
 		})
 	}
+}
+
+func compareReport(t *testing.T, how string, got psv.Report, want *psv.Report) {
+	t.Helper()
+
+	for _, c := range []struct {
+		name      string
+		got, want any
+	}{
+		{"verdict", got.Verdict, want.Verdict},
+		{"frame rate", got.FrameRate, want.FrameRate},
+		{"frames", got.Frames, want.Frames},
+		{"size", [2]int{got.Width, got.Height}, [2]int{want.Width, want.Height}},
+		{"failures", got.Failures, want.Failures},
+		{"defects", got.Defects, want.Defects},
+	} {
+		if !reflect.DeepEqual(c.got, c.want) {
+			t.Errorf("%s: %s: got %+v, want %+v", how, c.name, c.got, c.want)
+		}
+	}
+}
+
+// watchFile decodes a video and watches it live, rebuilding its analysis
+// from the decided frames of each Update. It returns the analysis and how
+// many frames the live measurement came before each decided failure.
+func watchFile(t *testing.T, path string, th psv.Thresholds) (*psv.Analysis, []int) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	info, err := psv.Probe(ctx, path, psv.Tools{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dec, err := psv.Decode(ctx, path, info, psv.Tools{}, psv.DecodeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer func() { _ = dec.Close() }()
+
+	a, err := psv.NewAnalyzer(info.FrameRate.Float64(), info.Width, info.Height, psv.Config{Thresholds: th})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analysis := *a.Analysis()
+	l := &lockstep{watch: a}
+
+	for {
+		f, err := dec.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		u, err := a.Watch(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		l.frames++
+
+		for k, act := range []psv.Activity{u.Building.Luminance, u.Building.Red} {
+			if act.Flashing > 0 && l.live[k] == 0 {
+				l.live[k] = u.Frame
+			}
+		}
+
+		analysis.Frames = append(analysis.Frames, u.Decided...)
+	}
+
+	u, err := a.Stop()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	analysis.Frames = append(analysis.Frames, u.Decided...)
+
+	return &analysis, liveLead(t, &analysis, l)
 }
 
 func readReport(t *testing.T, path string) *psv.Report {

@@ -103,6 +103,36 @@ second after it. PSV therefore decides each frame once one more second of video
 has been seen. `Analyzer.Analyze` returns how many frames it decided, and
 `Analyzer.Finish` decides the last second at the end of the video.
 
+Only the absence of flashing needs that second. A pixel that has made more
+than six transitions within the second ending at the current frame flashes,
+whatever comes next: later frames can only add transitions.
+
+### Watching live
+
+`Analyzer.Watch` serves live streams, such as a screen guard that covers
+flashing as it plays ([ADR-0004](adr/0004-watch-live-streams-with-psv-watch-v1.md)).
+It runs the same detector as `Analyze` but keeps no decided frames, so memory
+stays flat, and returns a `psv.watch/v1` update for every frame:
+
+- `Building` measures, in the frame being watched, each pixel that starts a
+  transition by its transitions within the last second: the highest count
+  (`Peak`), the share of the frame that already flashes (`Flashing`) and its
+  bounding box (`Bounds`), the share that transitions (`Area`), and the highest
+  count in each cell of the 64×36 grid (`Mask`). It reads the per-pixel history
+  the detector already keeps and changes nothing, so it costs a bit count per
+  transitioning pixel.
+- `Decided` carries the frames decided by this one, a second behind and
+  identical to those of `Analyze`.
+
+`Building` is provisional and pixel-level. Flashing pixels it reports are
+final, and appear in the frame that completes a failing sequence, a second
+before the failure is decided. It does not apply the area threshold, so it also
+reports flashing too small to fail.
+
+Frame numbers are stored as 32-bit integers. Every 2^30 frames, about 200 days
+at 60 fps, the detector moves them back by a multiple of the frame rate, so a
+watch can run indefinitely while the frame numbers it reports keep counting.
+
 ## Timing
 
 The count window is one second of frames: `round(fps)` frames, so 29.97 fps

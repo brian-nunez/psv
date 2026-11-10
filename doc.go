@@ -12,5 +12,8 @@
 // fails. The Trace24 preset measures area in 416×416-pixel regions instead.
 //
 // The package decodes video with FFmpeg (AnalyzeFile) or analyses frames
-// supplied by the caller (Analyzer).
+// supplied by the caller (Analyzer). Analyzer.Analyze keeps every decided
+// frame for a report; Analyzer.Watch serves live streams, reporting flashing
+// as it builds up in each frame and keeping nothing, in the psv.watch/v1
+// format.
 package psv

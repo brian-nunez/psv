@@ -12,7 +12,8 @@ All of it is in the repository:
 - `testdata/examples`: full-resolution real-world videos with the
   `psv.report/v1` report of their last accepted analysis. `TestExamples`
   decodes them with FFmpeg and checks that the verdict, frame count, failures
-  and defects still match. See its [README](../testdata/examples/README.md).
+  and defects still match, both through `AnalyzeFile` and watched live through
+  `Analyzer.Watch`. See its [README](../testdata/examples/README.md).
 - `testdata/clips`: three small generated clips (320×180) the CLI and API tests
   decode end to end. See its [README](../testdata/clips/README.md).
 
@@ -91,9 +92,18 @@ in the broadcast red sets is labelled `pass` in its JSON and `FAIL` in its
 listing, and in the trace24 sets the `wcag2_2` label always equals the
 `trace24` one.
 
+Every check runs twice in lockstep, through `Analyzer.Analyze` and live
+through `Analyzer.Watch`. The frames `Watch` decides must be identical to those
+of `Analyze`, and a failing video must show flashing pixels live no later than
+the frame that completes its first failing sequence. With `-v`, the suite logs
+how far ahead of the decided failure the live measurement came.
+
 ## Result
 
-369 pass, 0 fail, 9 skipped.
+369 pass, 0 fail, 9 skipped. Live, all 118 failing videos showed flashing
+pixels 29 to 38 frames ahead of their decided failure, and 91 of the 251
+passing videos, which sit just under a threshold, showed flashing pixels too
+small or too short to fail.
 
 ## Upstream errors
 
