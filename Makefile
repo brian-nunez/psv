@@ -1,8 +1,10 @@
-# psv build. Requires Go and, to analyse video or run every test, FFmpeg.
+# psv build. Requires Go and, to analyse video or run the integration tests, FFmpeg.
 #
 #   make build                  bin/psv
-#   make test                   race detector on a subset, then every test (CI runs this)
+#   make test                   unit tests with a fake FFmpeg: race detector on a subset, then every test
+#   make test-integration       the same tests against the real FFmpeg on PATH
 #   make test-examples          the full-resolution example videos (CI runs these on demand)
+#   make hooks                  check commit messages locally with .githooks/commit-msg
 #   make release VERSION=vX.Y.Z clean dist/, build every platform and write dist/SHA256SUMS
 #   make site                   the project site in _site/ (GitHub Actions publishes it to Pages)
 #
@@ -20,7 +22,7 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 win
 EXAMPLES := $(wildcard testdata/examples/*/video.mp4)
 REPORTS  := $(wildcard testdata/examples/*/report.json)
 
-.PHONY: all build install test test-examples test-scripts examples clips serve site vet lint fmt fmt-check release clean
+.PHONY: all build install hooks test test-integration test-examples test-scripts examples clips serve site vet lint fmt fmt-check release clean
 
 all: fmt-check lint build
 
@@ -34,15 +36,22 @@ test:
 	go test -race -short ./...
 	go test -timeout 30m ./...
 
+test-integration:
+	PSV_TEST_INTEGRATION=1 go test -count=1 -timeout 30m ./...
+
 # The full-resolution example videos in testdata/examples, checked against their reports.
 # EXAMPLE=<folder> runs one of them.
 test-examples:
-	PSV_TEST_EXAMPLES=1 go test -count=1 -timeout 30m -v \
+	PSV_TEST_INTEGRATION=1 PSV_TEST_EXAMPLES=1 go test -count=1 -timeout 30m -v \
 		-run '^TestExamples$$$(if $(EXAMPLE),/^$(EXAMPLE)$$)' .
 
 # Tests for the release scripts in scripts/.
 test-scripts:
 	bash scripts/next-version_test.sh
+	bash scripts/check-commit_test.sh
+
+hooks:
+	git config core.hooksPath .githooks
 
 # Regenerate the example reports with the current build. Exit status 1 means
 # the video failed, which is expected for most examples.

@@ -30,7 +30,11 @@ This runs two passes, and is what CI runs on every pull request and push to
    failing video of the luminance, red, area and synchronisation sets, plus the
    CLI and API tests on the clips.
 2. Every test (`go test`): the whole conformance suite and the CLI and API tests.
-   Tests that decode video skip when `ffmpeg` is not on `PATH`.
+   Tests that decode video use a fake `ffmpeg` and `ffprobe`
+   (`internal/fakeffmpeg`), so no FFmpeg is needed.
+
+`make test-integration` runs the same tests against the real FFmpeg on
+`PATH`, as the Integration tests job in CI does.
 
 The full-resolution example videos are slow to decode, so they run on demand:
 

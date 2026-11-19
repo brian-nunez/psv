@@ -3,19 +3,56 @@ version: "2"
 linters:
   default: standard
   enable:
+    - depguard
     - errorlint
     - gocritic
     - misspell
     - nlreturn
+    - nolintlint
     - revive
     - unconvert
     - whitespace
     - wsl_v5
   settings:
+    depguard:
+      rules:
+        repo:
+          list-mode: strict
+          files:
+            - "$all"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/psv
+          deny:
+            - pkg: os/exec
+              desc: "os/exec is not allowed"
+    nolintlint:
+      require-explanation: true
+      require-specific: true
     wsl_v5:
       allow-first-in-block: true
       allow-whole-block: false
       branch-max-lines: 2
+  exclusions:
+    rules:
+      - path: ^media\.go$
+        linters: [depguard]
+        text: "import 'os/exec'"
+      - path: ^cmd/psv/render\.go$
+        linters: [depguard]
+        text: "import 'os/exec'"
+      - path: ^examples_test\.go$
+        linters: [depguard]
+        text: "import 'os/exec'"
+      - path: ^watch_test\.go$
+        linters: [depguard]
+        text: "import 'os/exec'"
+      - path: ^cmd/psv/main_test\.go$
+        linters: [depguard]
+        text: "import 'os/exec'"
+      - path: ^internal/server/server_test\.go$
+        linters: [depguard]
+        text: "import 'os/exec'"
 
 formatters:
   enable:

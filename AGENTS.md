@@ -19,9 +19,11 @@ PSV finds hazardous flashing in video against WCAG 2.2 Success Criterion 2.3.1 a
 Use the `Makefile` targets:
 
 - `make build`: `bin/psv`.
-- `make test`: race detector on a subset, then every test; what CI runs. Needs `ffmpeg` on `PATH` for the CLI and API tests.
+- `make test`: unit tests, race detector on a subset, then every test. FFmpeg is faked by `internal/fakeffmpeg`, so no FFmpeg is needed.
+- `make test-integration`: the same tests against the real `ffmpeg` and `ffprobe` on `PATH` (`PSV_TEST_INTEGRATION=1`).
 - `make test-examples [EXAMPLE=<folder>]`: the full-resolution example videos.
 - `make lint`, `make fmt`, `make fmt-check`, `make vet`.
+- `make hooks`: check commit messages on `git commit` with `scripts/check-commit.sh`, the same check CI runs.
 - `make examples`: regenerate `testdata/examples/*/report.json` with the current build.
 - `make clips`: regenerate `testdata/clips` with FFmpeg.
 - `make serve`: build and run the API server and report UI.
@@ -58,7 +60,7 @@ Every commit follows [Conventional Commits 1.0.0](https://www.conventionalcommit
 
     Every sentence carries information a reviewer cannot get from the diff. A body with nothing to add is left out.
 - **Footers**: `BREAKING CHANGE: <what breaks and how to migrate>` for incompatible changes (and `!` after the type or scope); `Refs: #<issue>` or `Closes: #<issue>` for tracked work.
-- One logical change per commit.
+- One commit per pull request. CI fails a pull request with more than one commit or a message that `scripts/check-commit.sh` rejects.
 
 ## Decisions
 
@@ -68,5 +70,5 @@ Decisions are recorded in [`docs/adr/`](docs/adr/README.md). A decision that is 
 
 - `testdata/pse-test-media` is vendored third-party data under its own BSD 3-Clause licence: never edit it. Changing the pinned commit needs Brian's approval.
 - Do not add `testdata/examples` videos or regenerate their reports without Brian's approval; they are the real-footage baseline.
-- Do not add third-party imports to the core package.
+- Every package and test imports only the standard library and this module, only the files listed in `guardrails/exec_test.go` import `os/exec`, and no file has a `//nolint` directive. The tests in `guardrails/` enforce this, and `@brian-nunez` reviews every change to them.
 - Do not create tags or releases by hand; merging to `main` releases through the Release workflow.

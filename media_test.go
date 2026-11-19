@@ -124,6 +124,8 @@ func TestConformance(t *testing.T) {
 
 	masks := &maskCache{masks: map[string]*mask{}}
 	live := &liveStats{}
+	shard, shards := testShard(t)
+	index := 0
 
 	t.Cleanup(func() { live.log(t) })
 
@@ -148,6 +150,11 @@ func TestConformance(t *testing.T) {
 			for _, video := range listing {
 				name := set + "/" + video.name
 
+				index++
+				if index%shards != shard {
+					continue
+				}
+
 				t.Run(preset.preset+"/"+name, func(t *testing.T) {
 					t.Parallel()
 
@@ -167,6 +174,26 @@ func TestConformance(t *testing.T) {
 			}
 		}
 	}
+}
+
+func testShard(t *testing.T) (shard, shards int) {
+	t.Helper()
+
+	v := os.Getenv("PSV_TEST_SHARD")
+	if v == "" {
+		return 0, 1
+	}
+
+	i, n, ok := strings.Cut(v, "/")
+
+	shard, err1 := strconv.Atoi(i)
+	shards, err2 := strconv.Atoi(n)
+
+	if !ok || err1 != nil || err2 != nil || shards < 1 || shard < 0 || shard >= shards {
+		t.Fatalf("PSV_TEST_SHARD=%q, want <shard>/<shards> with 0 <= shard < shards", v)
+	}
+
+	return shard, shards
 }
 
 func verdictName(pass bool) string {

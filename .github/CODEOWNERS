@@ -1,2 +1,8 @@
 # Default owner for everything.
 *       @brian-nunez
+
+/guardrails/ @brian-nunez
+/.golangci.yml @brian-nunez
+/scripts/check-commit.sh @brian-nunez
+/scripts/check-commit_test.sh @brian-nunez
+/.githooks/ @brian-nunez

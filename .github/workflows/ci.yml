@@ -14,23 +14,44 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  check:
-    name: Format, lint, vet and test
+  commits:
+    name: One conventional commit
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Exactly one commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          count=$(git rev-list --count "$BASE..$HEAD")
+          if [ "$count" -ne 1 ]; then
+            git log --oneline "$BASE..$HEAD"
+            echo "::error::A pull request has exactly one commit; this one has $count. Squash them into one."
+            exit 1
+          fi
+
+      - name: Conventional commit message
+        run: |
+          git log -1 --format=%B HEAD > "$RUNNER_TEMP/commit-msg"
+          scripts/check-commit.sh "$RUNNER_TEMP/commit-msg"
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-
-      # The example-video, CLI and API tests decode video with FFmpeg.
-      - name: Install FFmpeg
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ffmpeg
-          ffmpeg -version | head -n 1
 
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -41,17 +62,148 @@ jobs:
       - name: Format
         run: make fmt-check
 
+  vet:
+    name: Vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
       - name: Vet
         run: make vet
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          install-only: true
 
       - name: Lint
         run: make lint
 
+  conformance:
+    name: Conformance ${{ matrix.shard }}/20
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Conformance
+        env:
+          PSV_TEST_SHARD: ${{ matrix.shard }}/20
+        run: go test -count=1 -run '^TestConformance$' .
+
+  conformance-race:
+    name: Conformance, race ${{ matrix.shard }}/5
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Conformance, race detector
+        env:
+          PSV_TEST_SHARD: ${{ matrix.shard }}/5
+        run: go test -count=1 -race -short -run '^TestConformance$' .
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
       - name: Test
-        run: make test
+        run: go test -count=1 -skip '^TestConformance$' ./...
+
+  test-race:
+    name: Test, race
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Test, race detector
+        run: go test -count=1 -race -short -skip '^TestConformance$' ./...
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+          ffmpeg -version | head -n 1
+
+      - name: Integration tests
+        run: make test-integration
+
+  test-scripts:
+    name: Test release scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
 
       - name: Test release scripts
         run: make test-scripts
+
+  build:
+    name: Build release binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
 
       - name: Build release binaries
         run: make release
