@@ -753,7 +753,9 @@ func (c *channel) locate(parts [][]event) (image.Rectangle, []byte) {
 
 // record adds a transition of region position pos in frame f and returns the
 // number of alternating transitions within the second ending at f and the
-// frame of the first of them.
+// frame of the first of them. Only the last maxTransitions+1 transitions are
+// kept, so both are taken from those: the count is capped at
+// maxTransitions+1, which still decides failure exactly.
 func (c *channel) record(pos int, dir int8, f int) (count, since int) {
 	c.posDir[pos] = dir
 	ring := c.times[pos*c.keep : (pos+1)*c.keep]

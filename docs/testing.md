@@ -71,11 +71,15 @@ frame. Three checks keep the model and `detector.go` in step:
 - `TestModelVectors` replays the model's answers in
   `testdata/model/vectors.json` against the detector.
 - `TestChannelMatchesModel`, a property test, compares the detector with the
-  model's Go translation on random pixels and regions at frame rates of 1 to
-  130.
+  model's Go translation on random channels of several pixels and regions, at
+  any frame rate and limit `NewAnalyzer` allows, with and without `rebase`.
 - `FuzzPixelMatchesModel`, `FuzzRegionMatchesModel` and `FuzzAgeMatchesShift`
   fuzz the same comparisons. `make test` runs their seeds, and `make fuzz`
   explores new inputs.
+- `TestDetectorScheduleMatchesModel` checks that `Analyzer.Watch` decides each
+  frame when the model says the decision is final, and
+  `TestRegionsMatchReference` checks the region search against a brute-force
+  one.
 
 ```bash
 make proofs          # check the proofs, needs elan
@@ -83,8 +87,9 @@ make model-vectors   # regenerate the vectors from the model
 make fuzz            # FUZZTIME=30s per target
 ```
 
-CI checks the proofs, fails when the committed vectors differ from the
-model's output, and fuzzes each target for 15 seconds.
+CI checks the proofs, fails when a theorem uses `sorry` or an added axiom or
+the committed vectors differ from the model's output, and fuzzes each target
+for 15 seconds.
 
 ## How the videos are made
 

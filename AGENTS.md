@@ -35,7 +35,7 @@ Use the `Makefile` targets:
 - The report UI renders reports and never analyses video. Figures it derives from per-frame results stay in `app.js` until another frontend needs them, at which point they move into the core.
 - CLI and API tests decode `testdata/clips`, never the example videos, so `make test` stays fast. Real footage is checked only by `TestExamples`.
 - `testdata/examples/*/report.json` and `testdata/clips/*.mp4` are generated: change them with `make examples` and `make clips`, review the diff, and commit the result. A change to example reports means detection results changed and needs a reason in the commit body.
-- A change to the counting in `detector.go` (`channel.step`, `age`, `recent`, `flashing`, `record`) that changes an answer fails `TestModelVectors` and `TestChannelMatchesModel`. Update the model in `proofs/` and its proofs to match, then run `make model-vectors` and commit the result. Never edit `testdata/model/vectors.json` by hand.
+- A change to the counting in `detector.go` (`channel.step`, `age`, `recent`, `flashing`, `record`) that changes an answer fails `TestModelVectors` and `TestChannelMatchesModel`. Update the model in `proofs/`, its proofs and the restated theorems in `proofs/Check.lean` to match, then run `make model-vectors` and commit the result. Never edit `testdata/model/vectors.json` by hand.
 - README and documentation examples are real output of a released binary, never hand-typed values.
 - `psv -version` and `tool.version` come from the build: the release tag in release binaries, `git describe` for `make build`. Never set a version by hand.
 

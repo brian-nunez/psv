@@ -88,9 +88,11 @@ func DefaultThresholds() Thresholds {
 type Flashes struct {
 	// Transitions is the number of alternating transitions within the last
 	// second of the region that transitioned in this frame with the most of
-	// them.
+	// them. Each region keeps only its last MaxTransitions+1 transitions, so
+	// it is at most MaxTransitions+1: enough to decide Failed exactly.
 	Transitions int `json:"transitions"`
-	// Since is the frame number of the first of those transitions.
+	// Since is the frame number of the first of those transitions, among
+	// the last MaxTransitions+1 the region kept.
 	Since int `json:"since,omitempty"`
 	// Region is that region, in source pixels.
 	Region image.Rectangle `json:"region"`
