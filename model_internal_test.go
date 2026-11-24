@@ -2,9 +2,11 @@ package psv
 
 import (
 	"encoding/json"
+	"image"
 	"math/big"
 	"math/rand/v2"
 	"os"
+	"reflect"
 	"slices"
 	"testing"
 )
@@ -813,5 +815,183 @@ func TestDetectorScheduleMatchesModel(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestRegionsMatchReference checks channel.regions, the region search the
+// detector runs on each decided frame, against a brute-force reference: the
+// flashing pixels the model finds, counted in every region position without
+// the summed-area table, the area test and direction rule, the requirement
+// that a position's transitions alternate, the ring count, and the choice of
+// the position with the most transitions, then the most area, first in row
+// order.
+func TestRegionsMatchReference(t *testing.T) {
+	const width, height, rw, rh = 6, 4, 3, 2
+
+	rng := rand.New(rand.NewPCG(5, 6))
+	cols, rows := width-rw+1, height-rh+1
+	failing := 0
+
+	// At 1 fps a window holds one transition, so nothing can flash.
+	for _, rate := range []int{2, 5, 24, 30, 33} {
+		for _, areaPercent := range []float64{10, 25, 50} {
+			maxTransitions := 1 + rng.IntN(min(4, rate-1))
+			c := newChannel(width, height, rw, rh, rate, maxTransitions)
+			n := 5*rate + 10
+
+			dirs := make([][]int8, width*height)
+			for p := range dirs {
+				dirs[p] = randomDirs(rng, rate, n)
+			}
+
+			models := make([]*modelPixel, width*height)
+			for p := range models {
+				models[p] = newModelPixel(rate, maxTransitions)
+			}
+
+			regions := make([]*modelRegion, cols*rows)
+			posDir := make([]int8, cols*rows)
+
+			for p := range regions {
+				regions[p] = &modelRegion{rate: rate, keep: maxTransitions + 1}
+			}
+
+			queued := make([][]event, n+1)
+
+			// reference decides frame f, knowing frames up to now.
+			reference := func(f, now int) Flashes {
+				up, down := make([]int, width*height), make([]int, width*height)
+				ups, downs := 0, 0
+
+				var box image.Rectangle
+
+				for _, e := range queued[f] {
+					p := int(e.pixel)
+					if !models[p].flashing(f, now) {
+						continue
+					}
+
+					if e.dir > 0 {
+						up[p], ups = 1, ups+1
+					} else {
+						down[p], downs = 1, downs+1
+					}
+
+					box = box.Union(image.Rect(p%width, p/width, p%width+1, p/width+1))
+				}
+
+				need := areaPercent * float64(rw*rh) / 100
+				if float64(ups) < need && float64(downs) < need {
+					return Flashes{}
+				}
+
+				var best Flashes
+
+				bestMoved := 0
+
+				for y := range rows {
+					for x := range cols {
+						u, d := 0, 0
+
+						for yy := y; yy < y+rh; yy++ {
+							for xx := x; xx < x+rw; xx++ {
+								u, d = u+up[yy*width+xx], d+down[yy*width+xx]
+							}
+						}
+
+						var dir int8
+
+						switch {
+						case float64(u) >= need && u >= d:
+							dir = 1
+						case float64(d) >= need:
+							dir = -1
+						default:
+							continue
+						}
+
+						pos := y*cols + x
+						if dir == posDir[pos] {
+							continue
+						}
+
+						posDir[pos] = dir
+						count, since := regions[pos].record(f)
+						moved := max(u, d)
+
+						if count > best.Transitions || count == best.Transitions && moved > bestMoved {
+							best = Flashes{Transitions: count, Since: since, Region: image.Rect(x, y, x+rw, y+rh)}
+							bestMoved = moved
+						}
+					}
+				}
+
+				if best.Transitions == 0 {
+					return Flashes{}
+				}
+
+				best.Area = float64(bestMoved) * 100 / float64(rw*rh)
+				best.Flashing = box
+
+				return best
+			}
+
+			moving := 0
+
+			check := func(f, now int) {
+				got, want := c.regions(f, now, areaPercent), reference(f, now)
+				got.Mask = nil
+
+				if want.Transitions > 0 {
+					moving++
+				}
+
+				if want.Transitions > maxTransitions {
+					failing++
+				}
+
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("rate %d, area %.0f%%, frame %d: regions %+v, reference %+v", rate, areaPercent, f, got, want)
+				}
+			}
+
+			for now := 0; now <= n; now++ {
+				events := c.pending(now)
+
+				for p := range dirs {
+					var dir int8
+					if now > 0 {
+						dir = dirs[p][now-1]
+					}
+
+					counted := now > 0 && c.step(p, now, dir)
+					models[p].mark(now, counted)
+
+					if counted {
+						events = append(events, event{int32(p), dir})
+					}
+				}
+
+				c.setPending(now, events)
+				queued[now] = slices.Clone(events)
+
+				if f := now - (rate - 1); f >= 0 {
+					check(f, now)
+				}
+			}
+
+			for f := max(n-rate+2, 0); f <= n; f++ {
+				check(f, n)
+			}
+
+			// The streams must exercise the search, not just pass through it.
+			if moving == 0 {
+				t.Fatalf("rate %d, area %.0f%%: no frame with region transitions", rate, areaPercent)
+			}
+		}
+	}
+
+	if failing == 0 {
+		t.Fatal("no frame failed")
 	}
 }
