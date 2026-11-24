@@ -474,7 +474,9 @@ func (c *channel) step(i, t int, dir int8) bool {
 	c.lastDir[i] = dir
 
 	h := c.hist[i*c.words : (i+1)*c.words]
-	age(h, t-int(c.updated[i]))
+	// int64, so that a pixel idle since a clamped frame number cannot
+	// overflow a 32-bit int. Anything past the history's width clears it.
+	age(h, int(min(int64(t)-int64(c.updated[i]), int64(len(h)*64))))
 	c.updated[i] = int32(t)
 	h[0] |= 1
 
@@ -526,11 +528,11 @@ func (c *channel) measure(events []event, a *activity) {
 
 // rebase moves the stored frame numbers shift frames back. Numbers that fall
 // below the int32 range are long out of every window and clamp to its
-// minimum.
+// minimum. The arithmetic is int64, which a 32-bit int would wrap.
 func (c *channel) rebase(shift int) {
 	move := func(v []int32) {
 		for i, f := range v {
-			v[i] = int32(max(int(f)-shift, math.MinInt32))
+			v[i] = int32(max(int64(f)-int64(shift), math.MinInt32))
 		}
 	}
 

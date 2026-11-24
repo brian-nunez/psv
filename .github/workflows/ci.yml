@@ -50,6 +50,9 @@ jobs:
       - name: Test
         run: make test
 
+      - name: Test on 32-bit
+        run: make test-386
+
       - name: Fuzz the detector against its model
         run: make fuzz FUZZTIME=15s
 

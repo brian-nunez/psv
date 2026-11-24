@@ -32,6 +32,13 @@ This runs two passes, and is what CI runs on every pull request and push to
 2. Every test (`go test`): the whole conformance suite and the CLI and API tests.
    Tests that decode video skip when `ffmpeg` is not on `PATH`.
 
+The short tests also run built for 32-bit x86, where `int` is 32 bits and
+the detector's int32 frame numbers can overflow it:
+
+```bash
+make test-386
+```
+
 The full-resolution example videos are slow to decode, so they run on demand:
 
 ```bash
