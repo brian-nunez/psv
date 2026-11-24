@@ -3,6 +3,7 @@
 #   make build                  bin/psv
 #   make test                   race detector on a subset, then every test (CI runs this)
 #   make test-examples          the full-resolution example videos (CI runs these on demand)
+#   make test-386               the short tests built for 32-bit x86, where int is 32 bits (CI runs this)
 #   make release VERSION=vX.Y.Z clean dist/, build every platform and write dist/SHA256SUMS
 #   make site                   the project site in _site/ (GitHub Actions publishes it to Pages)
 #   make proofs                 check the Lean model of the detector's counting in proofs/ (needs elan)
@@ -23,7 +24,7 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 win
 EXAMPLES := $(wildcard testdata/examples/*/video.mp4)
 REPORTS  := $(wildcard testdata/examples/*/report.json)
 
-.PHONY: all build install test test-examples test-scripts examples clips serve site vet lint fmt fmt-check release clean proofs model-vectors fuzz
+.PHONY: all build install test test-386 test-examples test-scripts examples clips serve site vet lint fmt fmt-check release clean proofs model-vectors fuzz
 
 all: fmt-check lint build
 
@@ -36,6 +37,11 @@ install:
 test:
 	go test -race -short ./...
 	go test -timeout 30m ./...
+
+# The short tests on 32-bit x86, where int is 32 bits and int32 frame numbers can overflow it.
+# -parallel 2 keeps the conformance subset under the 4 GB a 32-bit process can address.
+test-386:
+	GOARCH=386 CGO_ENABLED=0 go test -count=1 -short -parallel 2 ./...
 
 # The full-resolution example videos in testdata/examples, checked against their reports.
 # EXAMPLE=<folder> runs one of them.
