@@ -42,7 +42,7 @@ The model lives in `proofs/` and uses only Lean's core library, with the Lean ve
 
 ### Confirmation
 
-The `proofs` CI job runs `make proofs`, which fails on any warning and so on any `sorry`, then `make model-vectors`, and fails when the vectors change. The `check` job runs `TestModelVectors`, `TestChannelMatchesModel` and the fuzz seeds in `make test`, and fuzzes each target for 15 seconds.
+The `proofs` CI job runs `make proofs`, which fails on any warning, on any file in `proofs/PsvModel` that is not imported, and, through `proofs/Check.lean`, on any theorem that uses `sorry` or an added axiom or whose statement changed. It then runs `make model-vectors` and fails when the vectors change. The `check` job runs `TestModelVectors`, `TestChannelMatchesModel`, `TestDetectorScheduleMatchesModel`, `TestRegionsMatchReference` and the fuzz seeds in `make test`, and fuzzes each target for 15 seconds. `proofs/README.md` lists the parts of the Go code these tests check without a proof.
 
 ## Pros and Cons of the Options
 
