@@ -50,6 +50,9 @@ jobs:
       - name: Test
         run: make test
 
+      - name: Fuzz the detector against its model
+        run: make fuzz FUZZTIME=15s
+
       - name: Test release scripts
         run: make test-scripts
 
@@ -62,5 +65,40 @@ jobs:
             git status --short
             git diff
             echo "::error::The build changed tracked files. Run make fmt, go mod tidy or make examples and commit the result."
+            exit 1
+          fi
+
+  proofs:
+    name: Lean proofs and model vectors
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ELAN_VERSION: v4.2.4
+      ELAN_SHA256: 42b94d4244e8353142c456ec0e4ca6528fd898a6c604d4059f494e706e431f63
+    steps:
+      - uses: actions/checkout@v7
+
+      # elan installs the Lean version pinned in proofs/lean-toolchain.
+      - name: Install elan
+        run: |
+          curl -sSfL -o elan.tar.gz \
+            "https://github.com/leanprover/elan/releases/download/${ELAN_VERSION}/elan-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${ELAN_SHA256}  elan.tar.gz" | sha256sum -c -
+          tar -xzf elan.tar.gz
+          ./elan-init -y --default-toolchain none
+          rm elan.tar.gz elan-init
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Check proofs
+        run: make proofs
+
+      - name: Regenerate model vectors
+        run: make model-vectors
+
+      - name: Check the model vectors are current
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            echo "::error::testdata/model/vectors.json differs from the Lean model. Run make model-vectors and commit the result."
             exit 1
           fi

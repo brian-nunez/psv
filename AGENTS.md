@@ -10,6 +10,7 @@ PSV finds hazardous flashing in video against WCAG 2.2 Success Criterion 2.3.1 a
 - `internal/server`: the API. It stores nothing beyond the life of a request.
 - `internal/ui`: the report UI. `assets/` holds the only copy of the UI's HTML, CSS and JavaScript, which `psv serve` serves and `psv render` inlines ([ADR-0003](docs/adr/0003-build-the-cli-api-and-ui-as-thin-frontends-over-the-core.md)).
 - `testdata/pse-test-media`: the vendored conformance benchmark. `testdata/clips`: small generated clips for the CLI and API tests. `testdata/examples`: full-resolution real-world videos with their reports.
+- `proofs/`: a Lean 4 model of the detector's counting with proofs of the guarantees it relies on ([ADR-0005](docs/adr/0005-prove-the-detectors-counting-with-a-lean-model.md)). `testdata/model/vectors.json` holds the model's answers, which `TestModelVectors` replays against the detector.
 - `scripts/`: release scripts, tested by `make test-scripts`.
 - `design/mockups`: report design mockups and their generator scripts; not product code.
 - `docs/`: `how-it-works.md`, `testing.md` and `adr/`.
@@ -25,6 +26,7 @@ Use the `Makefile` targets:
 - `make examples`: regenerate `testdata/examples/*/report.json` with the current build.
 - `make clips`: regenerate `testdata/clips` with FFmpeg.
 - `make serve`: build and run the API server and report UI.
+- `make proofs`: check the Lean proofs in `proofs/` (needs elan). `make model-vectors`: regenerate `testdata/model/vectors.json`. `make fuzz [FUZZTIME=30s]`: fuzz the detector against its model.
 - `make release VERSION=vX.Y.Z`: the release binaries and `SHA256SUMS` in `dist/`. Releases are made by GitHub Actions, never locally.
 
 ## Conventions
@@ -33,6 +35,7 @@ Use the `Makefile` targets:
 - The report UI renders reports and never analyses video. Figures it derives from per-frame results stay in `app.js` until another frontend needs them, at which point they move into the core.
 - CLI and API tests decode `testdata/clips`, never the example videos, so `make test` stays fast. Real footage is checked only by `TestExamples`.
 - `testdata/examples/*/report.json` and `testdata/clips/*.mp4` are generated: change them with `make examples` and `make clips`, review the diff, and commit the result. A change to example reports means detection results changed and needs a reason in the commit body.
+- A change to the counting in `detector.go` (`channel.step`, `age`, `recent`, `flashing`, `record`) that changes an answer fails `TestModelVectors` and `TestChannelMatchesModel`. Update the model in `proofs/` and its proofs to match, then run `make model-vectors` and commit the result. Never edit `testdata/model/vectors.json` by hand.
 - README and documentation examples are real output of a released binary, never hand-typed values.
 - `psv -version` and `tool.version` come from the build: the release tag in release binaries, `git describe` for `make build`. Never set a version by hand.
 

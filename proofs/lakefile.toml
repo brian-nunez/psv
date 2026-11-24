@@ -1,0 +1,14 @@
+name = "psv-model"
+version = "0.1.0"
+defaultTargets = ["PsvModel", "vectors"]
+
+# Every warning fails the build, so a proof left as `sorry` cannot pass.
+[leanOptions]
+warningAsError = true
+
+[[lean_lib]]
+name = "PsvModel"
+
+[[lean_exe]]
+name = "vectors"
+root = "Vectors"
