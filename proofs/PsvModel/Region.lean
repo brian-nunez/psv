@@ -90,4 +90,50 @@ theorem ringCount_exact (rate keep f : Nat) {rs : List Nat} (hs : rs.Pairwise (�
   rw [ringCount_eq_min rate keep f hs]
   omega
 
+/-- In a decreasing list, taking `k` elements and then keeping the matches
+of an upward-closed predicate keeps the first `k` matches. -/
+theorem filter_take_sorted {p : Nat → Bool} {rs : List Nat} (k : Nat)
+    (hs : rs.Pairwise (· ≥ ·)) (hp : ∀ a b, b ≤ a → p b = true → p a = true) :
+    (rs.take k).filter p = (rs.filter p).take k := by
+  induction rs generalizing k with
+  | nil => simp
+  | cons a rest ih =>
+    cases k with
+    | zero => simp
+    | succ k =>
+      have hcons := List.pairwise_cons.mp hs
+      simp only [List.take_succ_cons, List.filter_cons]
+      by_cases ha : p a = true
+      · simp only [ha, ite_true, ih k hcons.2, List.take_succ_cons]
+      · have hnone : ∀ b ∈ rest, p b = false := by
+          intro b hb
+          cases hpb : p b with
+          | false => rfl
+          | true => exact absurd (hp a b (hcons.1 b hb) hpb) ha
+        have hz : rest.filter p = [] := List.filter_eq_nil_iff.mpr (fun b hb => by simp [hnone b hb])
+        have hz' : (rest.take k).filter p = [] :=
+          List.filter_eq_nil_iff.mpr (fun b hb => by simp [hnone b (List.mem_of_mem_take hb)])
+        simp [ha, hz, hz']
+
+theorem foldl_min_le (l : List Nat) (a : Nat) : l.foldl min a ≤ a := by
+  induction l generalizing a with
+  | nil => exact Nat.le_refl _
+  | cons x xs ih => exact Nat.le_trans (ih (min a x)) (Nat.min_le_left a x)
+
+/-- The first frame `channel.record` returns is never after the frame being
+decided. -/
+theorem ringSince_le (rate keep f : Nat) (rs : List Nat) : ringSince rate keep rs f ≤ f :=
+  foldl_min_le _ _
+
+/-- Below the cap, the first frame is exact: the earliest of all the
+region's transitions within the second ending at `f`, or `f` when there are
+none. Above it, it is the earliest of the last `keep`. -/
+theorem ringSince_exact (rate keep f : Nat) {rs : List Nat} (hs : rs.Pairwise (· ≥ ·))
+    (hc : trueCount rate rs f ≤ keep) :
+    ringSince rate keep rs f = (rs.filter (inSecond rate f)).foldl min f := by
+  unfold ringSince
+  rw [filter_take_sorted keep hs (inSecond_up rate f), List.take_of_length_le]
+  rw [← List.countP_eq_length_filter]
+  exact hc
+
 end PsvModel

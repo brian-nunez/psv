@@ -1,6 +1,6 @@
 name = "psv-model"
 version = "0.1.0"
-defaultTargets = ["PsvModel", "vectors"]
+defaultTargets = ["PsvModel", "Check", "vectors"]
 
 # Every warning fails the build, so a proof left as `sorry` cannot pass.
 [leanOptions]
@@ -8,6 +8,10 @@ warningAsError = true
 
 [[lean_lib]]
 name = "PsvModel"
+
+[[lean_lib]]
+name = "Check"
+roots = ["Check"]
 
 [[lean_exe]]
 name = "vectors"
