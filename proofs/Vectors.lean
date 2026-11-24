@@ -37,9 +37,13 @@ def below (n : Nat) : Gen Nat := do
 def pick (xs : List Nat) : Gen Nat := do
   return xs.getD (← below xs.length) 0
 
-def rates : List Nat := [1, 2, 3, 5, 8, 12, 24, 25, 30, 31, 32, 33, 48, 50, 60, 63, 64, 65, 100, 120]
+/-- Common frame rates and every rate on each side of a change in the
+number of history words, `(2*rate+63)/64`, up to `MaxFrameRate`. -/
+def rates : List Nat :=
+  [1, 2, 3, 5, 8, 12, 24, 25, 30, 31, 32, 33, 48, 50, 60, 63, 64, 65, 96, 97, 100, 120,
+    128, 129, 144, 160, 161, 192, 193, 224, 225, 240]
 
-def maxes : List Nat := [0, 1, 2, 3, 3, 6, 6, 6, 7]
+def maxes : List Nat := [0, 1, 2, 3, 3, 6, 6, 6, 7, 20]
 
 /-- One step direction for each frame from 1 to `n`: flashes, ramps, noise
 and stills in random segments. -/
@@ -117,10 +121,11 @@ def runPixel (rate maxT : Nat) (dirs : Array Int) : PixelCase := Id.run do
         decided := decided.set! f (flashing rate maxT memf f n)
   return { rate, maxT, dirs, counted, recent, live, decided }
 
-def pixelCase : Gen PixelCase := do
-  let rate ← pick rates
+/-- A pixel at `rate`, over a stream of a few seconds, or, when `short`,
+over less than a second, where only `detector.flush` decides frames. -/
+def pixelCase (rate : Nat) (short : Bool) : Gen PixelCase := do
   let maxT ← pick maxes
-  let n := 3 * rate + 10 + (← below (rate + 1))
+  let n ← if short then below (rate - 1) else (2 * rate + 10 + ·) <$> below (rate + 1)
   return runPixel rate maxT (← directions rate n)
 
 structure RegionCase where
@@ -132,9 +137,7 @@ structure RegionCase where
 
 /-- Records region transitions at increasing frames, with the count and
 first frame `channel.record` must return for each. -/
-def regionCase : Gen RegionCase := do
-  let rate ← pick rates
-  let maxT ← pick maxes
+def regionCase (rate maxT : Nat) : Gen RegionCase := do
   let keep := maxT + 1
   let records := 3 * keep + 5 + (← below (2 * keep))
   let mut frame ← below rate
@@ -171,13 +174,19 @@ def RegionCase.json (c : RegionCase) : String :=
   ",\"counts\":" ++ jsonArray c.counts toString ++
   ",\"since\":" ++ jsonArray c.since toString ++ "}"
 
+/-- One pixel and one region at every rate, short streams, and regions with
+the largest ring `NewAnalyzer` allows, 255 entries. -/
 def cases : Gen (Array PixelCase × Array RegionCase) := do
   let mut pixels := #[]
-  for _ in [0:48] do
-    pixels := pixels.push (← pixelCase)
+  for rate in rates do
+    pixels := pixels.push (← pixelCase rate false)
+  for _ in [0:12] do
+    pixels := pixels.push (← pixelCase (max 3 (← pick rates)) true)
   let mut regions := #[]
-  for _ in [0:48] do
-    regions := regions.push (← regionCase)
+  for rate in rates do
+    regions := regions.push (← regionCase rate (← pick maxes))
+  for _ in [0:4] do
+    regions := regions.push (← regionCase (← pick rates) 254)
   return (pixels, regions)
 
 def main : IO Unit := do
