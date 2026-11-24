@@ -47,17 +47,24 @@ test-examples:
 test-scripts:
 	bash scripts/next-version_test.sh
 
-# The Lean model of the detector's per-pixel and per-region counting, see proofs/README.md. The
-# build fails on any warning, so a proof left as sorry fails it. elan installs the Lean version
-# pinned in proofs/lean-toolchain.
+# The Lean model of the detector's per-pixel and per-region counting, see proofs/README.md. elan
+# installs the Lean version pinned in proofs/lean-toolchain. The build fails on any warning, and
+# proofs/Check.lean fails it when a theorem uses sorry or an added axiom, or a key theorem's
+# statement changes. Every file in proofs/PsvModel must be imported, or it would never be built.
 proofs:
+	@for f in proofs/PsvModel/*.lean; do \
+		m=$$(basename $$f .lean); \
+		grep -qx "import PsvModel.$$m" proofs/PsvModel.lean || \
+			{ echo "proofs/PsvModel.lean does not import PsvModel.$$m"; exit 1; }; \
+	done
 	cd proofs && lake build
 
 # The model's answers on fixed cases, which TestModelVectors replays against the detector. CI
-# fails when the committed file differs from the model's output.
+# fails when the committed file differs from the model's output. The output goes to the
+# gitignored build directory first, so a failed run leaves the committed file as it was.
 model-vectors: proofs
-	cd proofs && lake exe vectors > ../testdata/model/vectors.json.tmp
-	mv testdata/model/vectors.json.tmp testdata/model/vectors.json
+	cd proofs && lake exe vectors > .lake/vectors.json
+	cp proofs/.lake/vectors.json testdata/model/vectors.json
 
 # Fuzz the detector's counting against the model's Go translation in model_internal_test.go.
 # go test already runs each target's seed corpus; this explores new inputs for FUZZTIME each.

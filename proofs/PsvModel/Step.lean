@@ -97,4 +97,45 @@ theorem Pixel.run_replicate_length (p : Pixel) (d : Int) (n : Nat) :
     rw [Pixel.run_repeat (p.step d) d n (Pixel.step_stepDir p d)]
     split <;> simp
 
+/-- Directions that strictly alternate in sign: each is `+1` or `-1`, and
+the opposite of the one before when there is one. -/
+def SignAlternates : Int → List Int → Prop
+  | _, [] => True
+  | last, d :: ds => (d = 1 ∨ d = -1) ∧ (last ≠ 0 → d = -last) ∧ SignAlternates d ds
+
+/-- The direction of a step: `-1`, `0` or `+1`, all `lumaStep` and `redStep`
+return. -/
+def IsDir (d : Int) : Prop := d = -1 ∨ d = 0 ∨ d = 1
+
+/-- Counted transitions are among the steps taken. -/
+theorem Pixel.mem_run {p : Pixel} {ds : List Int} {d : Int} (h : d ∈ p.run ds) : d ∈ ds := by
+  induction ds generalizing p with
+  | nil => simp [Pixel.run] at h
+  | cons x xs ih =>
+    unfold Pixel.run at h
+    split at h
+    · rcases List.mem_cons.mp h with h | h
+      · exact h ▸ List.mem_cons_self
+      · exact List.mem_cons_of_mem _ (ih h)
+    · exact List.mem_cons_of_mem _ (ih h)
+
+theorem alternates_sign {last : Int} {xs : List Int} (h : Alternates last xs)
+    (hx : ∀ x ∈ xs, IsDir x) (hl : IsDir last) : SignAlternates last xs := by
+  induction xs generalizing last with
+  | nil => trivial
+  | cons d ds ih =>
+    obtain ⟨h0, hne, hrest⟩ := h
+    have hd := hx d List.mem_cons_self
+    unfold IsDir at hd hl
+    refine ⟨by omega, fun _ => by omega, ih hrest (fun x hm => hx x (List.mem_cons_of_mem _ hm)) ?_⟩
+    unfold IsDir
+    omega
+
+/-- With directions of `-1`, `0` and `+1`, counted transitions strictly
+alternate in sign: up, down, up, and so on. -/
+theorem Pixel.run_sign_alternates (p : Pixel) (ds : List Int)
+    (hd : ∀ d ∈ ds, IsDir d) (hl : IsDir p.lastDir) :
+    SignAlternates p.lastDir (p.run ds) :=
+  alternates_sign (p.run_alternates ds) (fun _ hm => hd _ (Pixel.mem_run hm)) hl
+
 end PsvModel
