@@ -59,6 +59,33 @@ go test -run 'TestConformance/wcag22/' .
 go test -run 'TestConformance/trace24/trace24_30fps_sync01' -v .
 ```
 
+## The model of the detector's counting
+
+The counting at the heart of the detector, which steps count as transitions,
+the bitmask history, the one-second windows and the region ring, has a Lean
+4 model in [`proofs/`](../proofs/README.md) with machine-checked proofs of
+the guarantees the detector relies on. Among them: live flashing reported by
+`Analyzer.Watch` is final, and a decision cannot change one second after its
+frame. Three checks keep the model and `detector.go` in step:
+
+- `TestModelVectors` replays the model's answers in
+  `testdata/model/vectors.json` against the detector.
+- `TestChannelMatchesModel`, a property test, compares the detector with the
+  model's Go translation on random pixels and regions at frame rates of 1 to
+  130.
+- `FuzzPixelMatchesModel`, `FuzzRegionMatchesModel` and `FuzzAgeMatchesShift`
+  fuzz the same comparisons. `make test` runs their seeds, and `make fuzz`
+  explores new inputs.
+
+```bash
+make proofs          # check the proofs, needs elan
+make model-vectors   # regenerate the vectors from the model
+make fuzz            # FUZZTIME=30s per target
+```
+
+CI checks the proofs, fails when the committed vectors differ from the
+model's output, and fuzzes each target for 15 seconds.
+
 ## How the videos are made
 
 The benchmark ships patterns, not videos: PNG masks of where things flash, CSV

@@ -5,6 +5,9 @@
 #   make test-examples          the full-resolution example videos (CI runs these on demand)
 #   make release VERSION=vX.Y.Z clean dist/, build every platform and write dist/SHA256SUMS
 #   make site                   the project site in _site/ (GitHub Actions publishes it to Pages)
+#   make proofs                 check the Lean model of the detector's counting in proofs/ (needs elan)
+#   make model-vectors          regenerate testdata/model/vectors.json from the Lean model
+#   make fuzz                   fuzz the detector against its model, FUZZTIME per target
 #
 # Releases are made by GitHub Actions (.github/workflows/release.yml), not from a local machine.
 
@@ -20,7 +23,7 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 win
 EXAMPLES := $(wildcard testdata/examples/*/video.mp4)
 REPORTS  := $(wildcard testdata/examples/*/report.json)
 
-.PHONY: all build install test test-examples test-scripts examples clips serve site vet lint fmt fmt-check release clean
+.PHONY: all build install test test-examples test-scripts examples clips serve site vet lint fmt fmt-check release clean proofs model-vectors fuzz
 
 all: fmt-check lint build
 
@@ -43,6 +46,29 @@ test-examples:
 # Tests for the release scripts in scripts/.
 test-scripts:
 	bash scripts/next-version_test.sh
+
+# The Lean model of the detector's per-pixel and per-region counting, see proofs/README.md. The
+# build fails on any warning, so a proof left as sorry fails it. elan installs the Lean version
+# pinned in proofs/lean-toolchain.
+proofs:
+	cd proofs && lake build
+
+# The model's answers on fixed cases, which TestModelVectors replays against the detector. CI
+# fails when the committed file differs from the model's output.
+model-vectors: proofs
+	cd proofs && lake exe vectors > ../testdata/model/vectors.json.tmp
+	mv testdata/model/vectors.json.tmp testdata/model/vectors.json
+
+# Fuzz the detector's counting against the model's Go translation in model_internal_test.go.
+# go test already runs each target's seed corpus; this explores new inputs for FUZZTIME each.
+FUZZTIME ?= 30s
+FUZZ     := FuzzPixelMatchesModel FuzzRegionMatchesModel FuzzAgeMatchesShift
+
+fuzz:
+	@for f in $(FUZZ); do \
+		echo "fuzzing $$f"; \
+		go test -run '^$$' -fuzz "^$$f$$" -fuzztime $(FUZZTIME) . || exit 1; \
+	done
 
 # Regenerate the example reports with the current build. Exit status 1 means
 # the video failed, which is expected for most examples.
